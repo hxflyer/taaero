@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Car | TA-aero</title>
+<meta name="description" content="How a STEM Racing car works, a 3D concept model, and a time attack simulator you can tune and race.">
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="site-header"></header>
+
+<main>
+  <section class="page-hero">
+    <div class="wrap stack">
+      <p class="eyebrow">The car</p>
+      <h1>20 metres. One second.</h1>
+      <p>No engine, no driver, no steering. Just a block of foam, a puff of CO₂ and a lot of thinking about air.</p>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap stack-lg">
+      <div class="split">
+        <div class="stack">
+          <p class="eyebrow">Anatomy</p>
+          <h2>What's on a STEM Racing car</h2>
+        </div>
+        <p>Every car on the grid has the same basic parts, and the regulations set limits for each one. The skill is in what you do inside those limits.</p>
+      </div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 900 330" role="img" aria-label="Side view of a STEM Racing car with labelled parts">
+          <line x1="20" y1="252" x2="880" y2="252" stroke="#6f8aa0" stroke-width="2"/>
+          <line x1="20" y1="262" x2="880" y2="262" stroke="#6f8aa0" stroke-width="1" stroke-dasharray="6 6"/>
+          <!-- body -->
+          <path d="M150 232 C230 226 300 205 380 176 C450 152 520 138 600 136 L742 136 L742 214 C700 232 640 236 560 236 L190 238 Z" fill="#265b6f" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M470 205 L560 190 L540 228 L532 228 L542 204 L474 214 Z" fill="#f4c430"/>
+          <!-- cartridge chamber -->
+          <rect x="640" y="150" width="102" height="44" rx="6" fill="#0f1e29"/>
+          <rect x="652" y="158" width="106" height="28" rx="12" fill="#b9c4cd" stroke="#0f1e29" stroke-width="2"/>
+          <!-- wings -->
+          <path d="M118 234 L196 226 L198 240 L118 244 Z" fill="#f4c430" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M726 96 L812 90 L814 104 L728 108 Z" fill="#f4c430" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M760 104 L790 104 L784 140 L742 140 Z" fill="#265b6f" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
+          <!-- wheels -->
+          <g fill="#17242e" stroke="#0f1e29" stroke-width="3">
+            <circle cx="262" cy="222" r="30"/><circle cx="668" cy="220" r="32"/>
+          </g>
+          <circle cx="262" cy="222" r="9" fill="#b9c4cd"/><circle cx="668" cy="220" r="10" fill="#b9c4cd"/>
+          <!-- tether guides -->
+          <circle cx="330" cy="248" r="5" fill="none" stroke="#a8322d" stroke-width="3"/>
+          <circle cx="600" cy="248" r="5" fill="none" stroke="#a8322d" stroke-width="3"/>
+          <!-- labels -->
+          <g stroke="#17242e" stroke-width="1.2" fill="none">
+            <path d="M150 226 V60"/><path d="M262 190 V34"/><path d="M430 158 V60"/><path d="M700 150 V34"/><path d="M790 88 V60"/>
+            <path d="M330 254 V300"/><path d="M668 254 V300"/>
+          </g>
+          <text x="150" y="52" text-anchor="middle">Front wing</text>
+          <text x="262" y="26" text-anchor="middle">Front wheels</text>
+          <text x="430" y="52" text-anchor="middle">Body, from one model block</text>
+          <text x="700" y="26" text-anchor="middle">CO₂ cartridge chamber</text>
+          <text x="800" y="52" text-anchor="middle">Rear wing</text>
+          <text x="330" y="318" text-anchor="middle">Tether line guides</text>
+          <text x="668" y="318" text-anchor="middle">Rear wheels</text>
+        </svg>
+      </div>
+
+      <ul class="rows">
+        <li><b>Body</b><span>Machined on a CNC router from a single block of lightweight model foam. Its shape decides most of the drag.</span></li>
+        <li><b>Cartridge chamber</b><span>Holds the 8 g CO₂ cartridge. At the start a pin pierces it and the escaping gas pushes the car forward.</span></li>
+        <li><b>Wings</b><span>Required by the rules, usually 3D printed. On a car this light they are about guiding air cleanly, not making downforce.</span></li>
+        <li><b>Wheels</b><span>Four of them, all must touch the track. Low-friction bearings and light rims save hundredths of a second.</span></li>
+        <li><b>Tether guides</b><span>Two small eyelets under the car. A line runs through them down the whole track to keep the car straight.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="band band--paper" id="3d">
+    <div class="wrap stack-lg">
+      <div class="split">
+        <div class="stack">
+          <p class="eyebrow">3D view</p>
+          <h2>Spin it around</h2>
+        </div>
+        <p>This is a simple concept model in our team colours, built to show the layout of a STEM Racing car. Our real CAD model will replace it once the first prototype is finished.</p>
+      </div>
+      <div class="stack">
+        <div class="viewer" id="viewer"><span class="note">Drag to rotate · concept model, not our final car</span></div>
+        <div class="chips" role="group" aria-label="Camera views">
+          <button class="chip" data-view="side">Side</button>
+          <button class="chip" data-view="front">Front</button>
+          <button class="chip" data-view="top">Top</button>
+          <button class="chip" data-view="spin" aria-pressed="true">Auto-spin</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap split">
+      <div class="stack">
+        <p class="eyebrow">Aerodynamics</p>
+        <h2>Why air is the enemy</h2>
+        <p>The cartridge gives every car roughly the same push. What separates fast from slow is how much of that push is wasted.</p>
+        <p>Drag grows with the <strong>square of speed</strong>. Double the speed and the air pushes back four times as hard. At race pace, drag is the biggest force slowing the car.</p>
+        <p class="panel" style="font-family: var(--mono); font-size: 0.95rem;">F<sub>drag</sub> = ½ · ρ · v² · C<sub>d</sub> · A<br><span class="muted">ρ air density · v speed · C<sub>d</sub> drag coefficient · A frontal area</span></p>
+      </div>
+      <ul class="rows">
+        <li><b>Shrink A</b><span>A smaller frontal area means less air to push out of the way. The rules set minimum sizes, so we design right up to them.</span></li>
+        <li><b>Lower C<sub>d</sub></b><span>Smooth, teardrop-like shapes let air close up behind the car instead of tumbling into a wake. Think of a falcon in a stoop.</span></li>
+        <li><b>Cut mass</b><span>A lighter car accelerates harder from the same thrust. There is a minimum weight, and the best cars sit just above it.</span></li>
+        <li><b>Free the wheels</b><span>Friction in the bearings and on the tether line steals speed for the whole 20 metres.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="band band--dark" id="simulator">
+    <div class="wrap stack-lg">
+      <div class="split">
+        <div class="stack">
+          <p class="eyebrow">Time attack simulator</p>
+          <h2>Tune it. Then beat the lights.</h2>
+        </div>
+        <p class="muted">Set up the car, press <strong>Arm</strong>, wait for all five lights to go out, then hit <strong>Launch</strong> (or the space bar). Your total is your reaction time plus the car's run. The run plays in real time, so do not blink.</p>
+      </div>
+
+      <div class="sim panel">
+        <div class="stack">
+          <div class="field">
+            <label for="s-mass">Car mass <output id="o-mass"></output></label>
+            <input type="range" id="s-mass" min="50" max="80" step="0.5" value="58">
+            <small>Lighter accelerates harder. 50 g is the lowest this simulator allows.</small>
+          </div>
+          <div class="field">
+            <label for="s-cd">Drag coefficient <output id="o-cd"></output></label>
+            <input type="range" id="s-cd" min="0.25" max="0.9" step="0.01" value="0.55">
+            <small>How slippery the shape is. A brick is about 1, a teardrop near 0.05.</small>
+          </div>
+          <div class="field">
+            <label for="s-area">Frontal area <output id="o-area"></output></label>
+            <input type="range" id="s-area" min="12" max="30" step="0.5" value="20">
+            <small>The size of the car's shadow seen from the front.</small>
+          </div>
+          <div class="field">
+            <label for="s-fric">Wheel friction <output id="o-fric"></output></label>
+            <input type="range" id="s-fric" min="0.01" max="0.08" step="0.005" value="0.04">
+            <small>Bearings, wheel wobble and the tether line.</small>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="lights" id="lights" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          <div>
+            <div class="strip" id="strip">
+              <div class="ticks"></div><div class="finish"></div>
+              <svg class="car" id="sim-car" viewBox="0 0 76 30" aria-hidden="true"><g transform="translate(76 0) scale(-1 1)">
+                <path d="M2 24 C20 22 34 12 52 9 L70 9 L70 22 C60 25 40 25 8 25 Z" fill="#265b6f" stroke="#0f1e29" stroke-width="1.5"/>
+                <path d="M62 3 L76 2 L76 6 L63 6 Z" fill="#f4c430"/><path d="M0 23 L12 21 L12 25 L0 26 Z" fill="#f4c430"/>
+                <circle cx="18" cy="23" r="6" fill="#17242e"/><circle cx="60" cy="23" r="6.5" fill="#17242e"/></g>
+              </svg>
+            </div>
+            <div class="strip-scale"><span>0 m</span><span>5</span><span>10</span><span>15</span><span>20 m</span></div>
+          </div>
+          <dl class="readouts">
+            <div><dt>Reaction</dt><dd id="r-react">0.000</dd></div>
+            <div><dt>Track time</dt><dd id="r-track">0.000</dd></div>
+            <div><dt>Top speed</dt><dd id="r-speed">0 km/h</dd></div>
+            <div><dt>Total</dt><dd class="total" id="r-total">0.000</dd></div>
+          </dl>
+          <div class="btn-row">
+            <button class="btn" id="sim-btn" type="button"><span>Arm</span></button>
+            <button class="btn btn--ghost" id="sim-reset" type="button"><span>Reset best</span></button>
+          </div>
+          <p class="sim-msg" id="sim-msg" role="status">Predicted track time for this setup: <span id="r-pred"></span></p>
+          <p class="muted" style="font-size: 0.85rem;">This is a simplified physics model for learning, not our test data. It assumes a thrust curve for an 8 g cartridge and ignores things like launch wobble.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer id="site-footer"></footer>
+<script src="js/site.js"></script>
+<script src="js/sim.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/car3d.js"></script>
+</body>
+</html>

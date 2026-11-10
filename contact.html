@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact | TA-aero</title>
+<meta name="description" content="Get in touch with Time Attack Aerodynamics by email, WhatsApp or Instagram.">
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header id="site-header"></header>
+
+<main>
+  <section class="page-hero">
+    <div class="wrap stack">
+      <p class="eyebrow">Contact us</p>
+      <h1>Radio check</h1>
+      <p>Sponsorship, questions about STEM Racing, or just want to say hello? We read everything.</p>
+    </div>
+  </section>
+
+  <section class="band" id="reach">
+    <div class="wrap split">
+      <div class="stack">
+        <p class="eyebrow">Get in touch</p>
+        <h2>Reach the team</h2>
+        <p class="muted">We are students, so replies usually come after school hours.</p>
+      </div>
+      <div id="channels"></div>
+    </div>
+  </section>
+
+  <section class="band band--paper">
+    <div class="wrap split">
+      <div class="stack">
+        <p class="eyebrow">Quick answers</p>
+        <h2>Asked in the pit lane</h2>
+      </div>
+      <div>
+        <details open>
+          <summary>What is TA-aero?</summary>
+          <p>Time Attack Aerodynamics is a team of five high school students competing in STEM Racing, the competition formerly known as F1 in Schools.</p>
+        </details>
+        <details>
+          <summary>How fast does the car go?</summary>
+          <p>STEM Racing cars cover the 20 metre track in roughly one second, which means top speeds of around 70 to 80 km/h. Ours is still being designed, so we will post real numbers after our first track test.</p>
+        </details>
+        <details>
+          <summary>How can my company sponsor you?</summary>
+          <p>Get in touch with the team and our Finance Manager will reply with the details. You can also read more on the <a href="sponsors.html">Sponsors page</a>.</p>
+        </details>
+        <details>
+          <summary>Can you visit our school or event?</summary>
+          <p>We would love to show younger students what the competition is like. Ask us and we will check with our teachers.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+<script src="js/site.js"></script>
+<script>
+  // Contact details come from CONFIG at the top of js/site.js. Only the ones that are filled in are shown.
+  const list = [
+    ["Email", CONFIG.email, v => "mailto:" + v, v => v],
+    ["WhatsApp", CONFIG.whatsapp, v => "https://wa.me/" + v.replace(/\D/g, ""), v => v],
+    ["Instagram", CONFIG.instagram, v => "https://instagram.com/" + v, v => "@" + v]
+  ].filter(c => c[1]);
+  if (list.length) {
+    document.getElementById("channels").innerHTML = list.map(([name, val, href, show]) =>
+      `<div class="channel"><b>${name}</b><a href="${href(val)}" target="_blank" rel="noopener"><span>${show(val)}</span></a></div>`).join("");
+  } else {
+    document.getElementById("reach").hidden = true;
+  }
+</script>
+</body>
+</html>
