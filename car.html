@@ -8,7 +8,7 @@
 <link rel="icon" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
 <header id="site-header"></header>
@@ -25,31 +25,82 @@
   <section class="band band--paper" id="3d">
     <div class="wrap stack-lg">
       <div class="split">
-        <h2>Streamlined concept</h2>
+        <div class="stack">
+          <p class="eyebrow">Concept</p>
+          <h2>Streamlined concept</h2>
+        </div>
         <p>A tapered nose and rounded cartridge housing guide air over the body. Narrow wings and an undercut between the wheels leave room for air to pass around it.</p>
       </div>
       <img class="concept-render" src="images/car-concept.jpg" width="1536" height="1024" alt="Teal STEM Racing car with the diving falcon painted on its side, yellow wings and four exposed wheels">
-      <div class="stack">
-        <h3>3D model and wind tunnel</h3>
-        <div class="viewer" id="viewer">
-          <span class="note" role="status">Loading the 3D model…</span>
+    </div>
+  </section>
+
+  <section class="band band--dark" id="lab">
+    <div class="wrap stack-lg">
+      <div class="split">
+        <div class="stack">
+          <p class="eyebrow">3D lab</p>
+          <h2>Take it apart. Put it in the tunnel.</h2>
         </div>
-        <div class="chips" id="car-views" role="group" aria-label="Model controls" hidden>
-          <button class="chip" data-view="perspective" type="button">Three-quarter</button>
-          <button class="chip" data-view="side" type="button">Side</button>
-          <button class="chip" data-view="front" type="button">Front</button>
-          <button class="chip" data-view="top" type="button">Top</button>
-          <button class="chip" data-view="spin" type="button" aria-pressed="false">Auto-spin</button>
-          <button class="chip" id="airflow-toggle" type="button" aria-pressed="false" aria-controls="airflow-options">Airflow</button>
+        <p class="muted">One model, three ways to look at it. Spin the finished car under studio lights, pull every component apart, or switch on the wind tunnel to see where the air speeds up and where it stalls.</p>
+      </div>
+
+      <div class="lab">
+        <div class="lab-tabs" role="tablist" aria-label="3D lab mode">
+          <button role="tab" type="button" data-mode="studio" aria-selected="true">Studio</button>
+          <button role="tab" type="button" data-mode="exploded" aria-selected="false">Exploded view</button>
+          <button role="tab" type="button" data-mode="airflow" aria-selected="false">Wind tunnel</button>
         </div>
-        <div class="stack" id="airflow-options" hidden>
-          <div class="airflow-controls">
-            <label for="flow-speed">Flow playback speed</label>
-            <input id="flow-speed" type="range" min="0.25" max="2" step="0.25" value="1">
-            <output id="flow-rate" for="flow-speed">1×</output>
-            <button class="chip" id="flow-pause" type="button">Pause flow</button>
+        <div class="lab-stage">
+          <div class="viewer" id="viewer">
+            <span class="note" role="status">Loading the 3D model…</span>
+            <div class="pins" id="part-pins" hidden></div>
+            <div class="legend" id="flow-legend" hidden><span data-lo>slow</span><i></i><span data-hi>fast</span></div>
           </div>
-          <p class="muted">Cyan traces show air moving from nose to tail. Amber traces mark the modeled wake behind the wheels and rear wing. Paths are illustrative estimates.</p>
+          <aside class="lab-side" id="lab-controls" hidden>
+            <div class="stack" data-panel="studio">
+              <h3>Studio</h3>
+              <p class="muted">Painted, assembled and lit like a product shot. The falcon on each flank is our real team logo.</p>
+              <div class="chips" role="group" aria-label="Camera views">
+                <button class="chip" data-view="perspective" type="button">Three-quarter</button>
+                <button class="chip" data-view="side" type="button">Side</button>
+                <button class="chip" data-view="front" type="button">Front</button>
+                <button class="chip" data-view="rear" type="button">Rear</button>
+                <button class="chip" data-view="top" type="button">Top</button>
+                <button class="chip" data-view="spin" type="button" aria-pressed="false">Auto-spin</button>
+              </div>
+              <dl class="spec-list">
+                <div><dt>Power</dt><dd>8 g CO₂ cartridge</dd></div>
+                <div><dt>Body</dt><dd>One machined model block</dd></div>
+                <div><dt>Wheels</dt><dd>4, on ball bearings</dd></div>
+                <div><dt>Guidance</dt><dd>Tether line, no steering</dd></div>
+              </dl>
+            </div>
+
+            <div class="stack" data-panel="exploded" hidden>
+              <h3>Exploded view</h3>
+              <div class="field">
+                <label for="explode">Pull apart <output id="explode-out" for="explode">100%</output></label>
+                <input id="explode" type="range" min="0" max="100" value="100">
+              </div>
+              <div class="part-list" id="part-list"></div>
+              <div class="part-info" id="part-info" aria-live="polite"></div>
+            </div>
+
+            <div class="stack" data-panel="airflow" hidden>
+              <h3>Wind tunnel</h3>
+              <p class="muted">Lines and particles are coloured by air speed. Blue is slow, red is fast. Look for the slow pocket at the nose and the swirling wakes behind the wheels.</p>
+              <div class="field">
+                <label for="flow-speed">Playback speed <output id="flow-rate" for="flow-speed">1×</output></label>
+                <input id="flow-speed" type="range" min="0.25" max="2" step="0.25" value="1">
+              </div>
+              <div class="chips">
+                <button class="chip" id="flow-pause" type="button">Pause flow</button>
+                <button class="chip" id="pressure-toggle" type="button" aria-pressed="false">Pressure map</button>
+              </div>
+              <p class="muted small">The pressure map colours the body by how squarely each surface faces the air. Both views are illustrative estimates, not CFD results.</p>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
@@ -197,10 +248,11 @@
 </main>
 
 <footer id="site-footer"></footer>
-<script src="js/site.js"></script>
-<script src="js/sim.js"></script>
+<script src="js/site.js?v=3"></script>
+<script src="js/sim.js?v=3"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/falcon-decal.js"></script>
-<script src="js/car3d.js"></script>
+<script src="js/falcon-decal.js?v=3"></script>
+<script src="js/car-model.js?v=3"></script>
+<script src="js/car3d.js?v=3"></script>
 </body>
 </html>

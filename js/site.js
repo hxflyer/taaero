@@ -11,6 +11,7 @@ const CONFIG = {
 const NAV = [
   ["index.html", "Home"],
   ["car.html", "The Car"],
+  ["game.html", "Race"],
   ["team.html", "The Team"],
   ["journey.html", "Journey"],
   ["sponsors.html", "Sponsors"],
@@ -83,6 +84,19 @@ function fillSlots() {
   });
 }
 
+/* Sections ease in as they scroll into view. Anything already on screen shows straight away. */
+function reveal() {
+  if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const items = document.querySelectorAll("main .band .wrap > *, main .band .grid-3 > *, main .band .steps > li, main .band .rows > li");
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+  }), { rootMargin: "0px 0px -8% 0px" });
+  items.forEach((el, i) => {
+    if (el.closest(".lab, .game, .sim") || el.getBoundingClientRect().top < innerHeight) return;
+    el.classList.add("reveal"); el.style.transitionDelay = (i % 4) * 60 + "ms"; io.observe(el);
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
-  buildHeader(); buildFooter(); fillLogos(); fillSlots();
+  buildHeader(); buildFooter(); fillLogos(); fillSlots(); reveal();
 });

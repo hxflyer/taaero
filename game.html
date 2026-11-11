@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Race | TA-aero</title>
+<meta name="description" content="Stoop Grand Prix: drive the TA-aero car against five rivals in a 3D racing game that runs in your browser.">
+<link rel="icon" href="images/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<header id="site-header"></header>
+
+<main>
+  <section class="page-hero page-hero--tight">
+    <div class="wrap stack">
+      <p class="eyebrow">Race</p>
+      <h1>Stoop Grand Prix</h1>
+      <p>Our car, a full circuit and five rivals. Three laps. You start at the back.</p>
+    </div>
+  </section>
+
+  <section class="band band--game">
+    <div class="wrap stack-lg">
+      <div class="game" id="game" tabindex="0" aria-label="Racing game">
+        <div class="g-hud" id="g-hud" hidden>
+          <div class="g-top">
+            <div class="g-stat"><span>Position</span><b id="g-pos">6th</b></div>
+            <div class="g-stat"><span>Lap</span><b id="g-lap">1/3</b></div>
+            <div class="g-stat"><span>Time</span><b id="g-time">0:00.00</b></div>
+            <div class="g-stat"><span>Best lap</span><b id="g-best">–:––.––</b></div>
+          </div>
+          <canvas class="g-map" id="g-map" width="220" height="200" aria-hidden="true"></canvas>
+          <div class="g-speedo">
+            <b id="g-speed">0</b><span>km/h</span>
+            <div class="g-boost" title="CO₂ boost"><i id="g-boost"></i></div>
+            <span class="g-boost-label">CO₂ boost</span>
+          </div>
+          <p class="g-msg" id="g-msg" role="status"></p>
+          <p class="g-wrong" id="g-wrong" hidden>Wrong way</p>
+        </div>
+        <div class="lights g-lights" id="g-lights" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+        <div class="g-touch" id="g-touch" hidden>
+          <div><button type="button" data-key="ArrowLeft" aria-label="Steer left">◀</button><button type="button" data-key="ArrowRight" aria-label="Steer right">▶</button></div>
+          <div><button type="button" data-key="KeyB" class="b">CO₂</button><button type="button" data-key="ArrowDown" class="r">Brake</button><button type="button" data-key="ArrowUp" class="g">Gas</button></div>
+        </div>
+
+        <div class="g-bar">
+          <button type="button" id="g-cam">Camera</button>
+          <button type="button" id="g-full">Fullscreen</button>
+        </div>
+
+        <div class="g-overlay" id="g-menu">
+          <div class="g-card">
+            <span data-logo></span>
+            <h2>Stoop Grand Prix</h2>
+            <p id="g-menu-msg">Loading the circuit…</p>
+            <button class="btn" id="g-start" type="button" disabled><span>Start race</span></button>
+            <p class="g-keys"><kbd>↑</kbd> gas <kbd>↓</kbd> brake <kbd>←</kbd><kbd>→</kbd> steer <kbd>Shift</kbd> CO₂ boost</p>
+          </div>
+        </div>
+        <div class="g-overlay" id="g-pause" hidden>
+          <div class="g-card">
+            <h2>Paused</h2>
+            <div class="btn-row"><button class="btn" id="g-resume" type="button"><span>Resume</span></button><button class="btn btn--ghost" id="g-restart" type="button"><span>Restart</span></button></div>
+          </div>
+        </div>
+        <div class="g-overlay" id="g-result" hidden>
+          <div class="g-card">
+            <h2 id="g-result-title">Finished</h2>
+            <ol class="g-rows" id="g-result-rows"></ol>
+            <p id="g-result-best"></p>
+            <button class="btn" id="g-again" type="button"><span>Race again</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="stack">
+          <h3>Controls</h3>
+          <ul class="keys">
+            <li><kbd>↑</kbd> or <kbd>W</kbd><span>Accelerate</span></li>
+            <li><kbd>↓</kbd> <kbd>S</kbd> or <kbd>Space</kbd><span>Brake, then reverse</span></li>
+            <li><kbd>←</kbd> <kbd>→</kbd> or <kbd>A</kbd> <kbd>D</kbd><span>Steer</span></li>
+            <li><kbd>Shift</kbd> or <kbd>B</kbd><span>CO₂ boost</span></li>
+            <li><kbd>C</kbd><span>Change camera</span></li>
+            <li><kbd>R</kbd><span>Put me back on track</span></li>
+            <li><kbd>P</kbd><span>Pause</span></li>
+          </ul>
+          <p class="muted small">On a phone or tablet, use the buttons on the screen.</p>
+        </div>
+        <div class="stack">
+          <h3>How to win</h3>
+          <p>Brake in a straight line before the corner, turn in late and get back on the gas early. Stay off the grass: it costs far more time than it looks.</p>
+          <p>Your CO₂ tank gives about three and a half seconds of extra thrust and refills slowly. Save it for the exit of a slow corner or the main straight.</p>
+        </div>
+        <div class="stack">
+          <h3>Is this what STEM Racing is like?</h3>
+          <p>Not quite. A real STEM Racing car has no steering and no driver. It runs dead straight down a 20 metre track on a tether line and is finished in about a second.</p>
+          <p>This game imagines our car scaled up to full size and let loose on a circuit. For the real thing, try the <a href="car.html#simulator">time attack simulator</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer id="site-footer"></footer>
+<script src="js/site.js?v=3"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/falcon-decal.js?v=3"></script>
+<script src="js/car-model.js?v=3"></script>
+<script src="js/game.js?v=3"></script>
+</body>
+</html>

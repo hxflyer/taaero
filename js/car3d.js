@@ -1,480 +1,354 @@
-/* Studio model and illustrative wind tunnel. The nose points along −x. */
+/* 3D lab: studio render, exploded view and illustrative wind tunnel. Uses the shared builder in car-model.js. */
 (function () {
   const box = document.getElementById("viewer");
   if (!box) return;
   const note = box.querySelector(".note");
-  if (!window.THREE) {
-    note.textContent = "An internet connection is needed to load the 3D viewer.";
-    return;
-  }
+  if (!window.THREE || !window.TAAero) { note.textContent = "An internet connection is needed to load the 3D viewer."; return; }
+  const T = THREE, A = TAAero, lin = A.lin, { lerp, clamp, smoothstep: smooth } = T.MathUtils;
 
   let renderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  } catch {
-    note.textContent = "WebGL is unavailable in this browser.";
-    return;
-  }
+  try { renderer = new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" }); }
+  catch { note.textContent = "WebGL is unavailable in this browser."; return; }
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1;
+  renderer.outputEncoding = T.sRGBEncoding;
+  renderer.toneMapping = T.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
   renderer.domElement.setAttribute("aria-hidden", "true");
   box.prepend(renderer.domElement);
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(32, 16 / 9, 0.1, 150);
-  const car = new THREE.Group();
-  scene.add(car, new THREE.HemisphereLight(0xe6f8ff, 0x53677d, 1.05));
-  function light(color, intensity, x, y, z) {
-    const lamp = new THREE.DirectionalLight(color, intensity);
-    lamp.position.set(x, y, z);
-    scene.add(lamp);
-  }
-  light(0xffeed6, 1.6, -6, 12, 8);
-  light(0x8bdcff, 1.8, 4, 5, -8);
+  const BG = lin(0x0b131c);
+  const scene = new T.Scene();
+  scene.background = BG;
+  scene.fog = new T.Fog(BG, 70, 180);
+  scene.environment = A.makeEnvironment(renderer, "studio");
+  const camera = new T.PerspectiveCamera(30, 16 / 9, 0.5, 300);
 
-  const finish = (color, roughness, metalness = 0) =>
-    new THREE.MeshStandardMaterial({ color: new THREE.Color(color).convertSRGBToLinear(), roughness, metalness });
-  const teal = finish(0x09556a, 0.43, 0.18);
-  const gold = finish(0xffa900, 0.46, 0.14);
-  const carbon = finish(0x131c24, 0.67);
-  const rubber = finish(0x111419, 0.72);
-  const steel = finish(0xa0adb8, 0.28, 0.55);
+  // Studio lights: a soft key that casts the shadow, plus cool rim light from behind
+  scene.add(new T.HemisphereLight(0xdfefff, 0x1a2633, 0.35));
+  const key = new T.DirectionalLight(0xfff1dc, 1.5);
+  key.position.set(-9, 22, 13); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); key.shadow.bias = -0.0004; key.shadow.radius = 5; key.shadow.normalBias = 0.02;
+  Object.assign(key.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 70 });
+  scene.add(key);
+  const rim = new T.DirectionalLight(0x8fd4ff, 1.1); rim.position.set(10, 8, -16); scene.add(rim);
 
-  function mesh(geometry, material, x = 0, y = 0, z = 0) {
-    const part = new THREE.Mesh(geometry, material);
-    part.position.set(x, y, z);
-    car.add(part);
-    return part;
-  }
+  // Glossy studio floor
+  const floor = new T.Mesh(new T.CircleGeometry(220, 64),
+    new T.MeshStandardMaterial({ color: lin(0x0f1a26), roughness: 0.62, metalness: 0, envMapIntensity: 0.5 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const grid = new T.GridHelper(120, 60, 0x2d5d7c, 0x1b3345);
+  grid.material.transparent = true; grid.material.opacity = 0; grid.position.y = 0.01; scene.add(grid);
 
-  // Each station gives x, the underside and crown heights, and the half-width.
-  const stations = [
-    [-10.1, 0.57, 0.63, 0.035], [-9.8, 0.49, 0.91, 0.43],
-    [-8.7, 0.46, 1.28, 0.82], [-6.4, 0.48, 1.67, 1.18],
-    [-3.9, 0.60, 2.14, 1.57], [-1.1, 0.71, 2.45, 1.86],
-    [2.0, 0.79, 2.80, 1.98], [4.6, 0.75, 3.50, 1.93],
-    [6.6, 0.61, 3.69, 1.69], [8.3, 0.78, 3.32, 1.38],
-    [9.2, 1.01, 2.96, 1.12], [9.23, 1.05, 2.91, 1.07],
-    [9.24, 1.97, 1.99, 0.02]
-  ];
+  const rig = new T.Group(); scene.add(rig);   // lifted as the car explodes so nothing dips below the floor
+  let car = null;
 
-  // Shape interpolation shares the same surface with the paint and airflow.
-  function bodyAt(x) {
-    const nextStation = stations.findIndex(row => row[0] >= x);
-    const index = nextStation < 0 ? stations.length - 2 : Math.max(0, nextStation - 1);
-    const a = stations[index];
-    const b = stations[index + 1];
-    const p = stations[Math.max(0, index - 1)];
-    const q = stations[Math.min(stations.length - 1, index + 2)];
-    const dx = b[0] - a[0];
-    const t = THREE.MathUtils.clamp((x - a[0]) / dx, 0, 1);
-    const blend = t * t * (3 - 2 * t);
-    return [1, 2, 3].map(column => {
-      const inSlope = (b[column] - p[column]) / (b[0] - p[0]);
-      const outSlope = (q[column] - a[column]) / (q[0] - a[0]);
-      return THREE.MathUtils.lerp(a[column], b[column], blend)
-        + dx * t * (1 - t) * ((1 - t) * inSlope - t * outSlope);
-    });
-  }
+  /* ---------- Camera ---------- */
+  const views = { perspective: [-0.62, 0.3], side: [0, 0.07], front: [-Math.PI / 2, 0.1], top: [0, 1.5], rear: [1.05, 0.28] };
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+  let yaw = -0.62, pitch = 0.3, yawT = yaw, pitchT = pitch, zoom = 1, zoomT = 1;
+  let dist = 30, tgtY = 2;
+  let mode = "studio", spin = !reduced.matches, drag = null;
+  let explodeT = 0, explodeNow = 0, selected = null;
+  const DIST = { studio: 31, exploded: 58, airflow: 44 };
 
-  function skin(x, theta, offset = 0) {
-    const [bottom, top, width] = bodyAt(x);
-    return [
-      x,
-      (bottom + top) / 2 + (Math.max(0.01, (top - bottom) / 2) + offset) * Math.cos(theta),
-      (Math.max(0.01, width) + offset) * Math.sin(theta)
-    ];
-  }
-
-  function surface(rows, columns, sample) {
-    const positions = [], indices = [], uv = [];
-    for (let i = 0; i <= rows; i++) {
-      for (let j = 0; j <= columns; j++) {
-        positions.push(...sample(i / rows, j / columns));
-        uv.push(i / rows, 1 - j / columns);
-        if (i === rows || j === columns) continue;
-        const a = i * (columns + 1) + j;
-        const b = a + columns + 1;
-        indices.push(a, a + 1, b, a + 1, b + 1, b);
-      }
+  /* ---------- Exploded view UI ---------- */
+  const pins = document.getElementById("part-pins"), list = document.getElementById("part-list");
+  const info = document.getElementById("part-info"), slider = document.getElementById("explode");
+  const HILITE = lin(0x2aa8ff);
+  function select(p) {
+    selected = p === selected ? null : p;
+    for (const q of car.parts) {
+      const on = q === selected;
+      q.mats.forEach(m => { if (m.emissive) { m.emissive.copy(on ? HILITE : new T.Color(0)); m.emissiveIntensity = on ? 0.35 : 1; } });
+      q.btn.setAttribute("aria-pressed", on); q.pin.classList.toggle("on", on);
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-    geometry.setIndex(indices);
-    geometry.computeVertexNormals();
-    return geometry;
+    info.innerHTML = selected
+      ? `<h4>${selected.name}</h4><p class="spec">${selected.material}</p><p>${selected.blurb}</p>`
+      : `<p>Pick a part from the list, or click it on the model, to see what it does.</p>`;
   }
-
-  const bodyXs = stations.flatMap((row, i) => i === stations.length - 1 ? [row[0]]
-    : Array.from({ length: 8 }, (_, step) => THREE.MathUtils.lerp(row[0], stations[i + 1][0], step / 8)));
-  mesh(surface(bodyXs.length - 1, 80, (u, v) =>
-    skin(bodyXs[Math.round(u * (bodyXs.length - 1))], (v - 0.5) * Math.PI * 2)), teal);
-
-  // A single stripe branches into two swept feathers over the cartridge housing.
-  mesh(surface(80, 8, (u, v) => {
-    const x = THREE.MathUtils.lerp(-9.92, 6.5, u);
-    const width = bodyAt(x)[2];
-    const halfAngle = Math.asin(Math.min(0.3, 0.08 / width));
-    return skin(x, (2 * v - 1) * halfAngle, 0.022);
-  }), gold);
-  for (const side of [-1, 1]) {
-    mesh(surface(40, 8, (u, v) => {
-      const sweep = 0.62 * u ** 1.3;
-      return skin(THREE.MathUtils.lerp(2.7, 7.7, u),
-        side * sweep + (2 * v - 1) * 0.065 * (1 - u), 0.026);
-    }), gold);
-  }
-
-  function outlinedPart(points, depth, material, z) {
-    const shape = new THREE.Shape();
-    points.forEach(([x, y], i) => i ? shape.lineTo(x, y) : shape.moveTo(x, y));
-    shape.closePath();
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-      depth, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.04, bevelSegments: 3
+  function buildPartUI() {
+    car.parts.forEach((p, i) => {
+      p.btn = document.createElement("button");
+      p.btn.type = "button"; p.btn.className = "part-btn"; p.btn.setAttribute("aria-pressed", "false");
+      p.btn.innerHTML = `<b>${i + 1}</b><span>${p.name}</span>`;
+      p.btn.addEventListener("click", () => select(p));
+      list.appendChild(p.btn);
+      p.pin = document.createElement("button");
+      p.pin.type = "button"; p.pin.className = "pin"; p.pin.textContent = i + 1; p.pin.title = p.name; p.pin.tabIndex = -1;
+      p.pin.addEventListener("click", () => select(p));
+      pins.appendChild(p.pin);
     });
-    return mesh(geometry, material, 0, 0, z - depth / 2);
   }
-
-  // Swept floor, thin airfoil sections, and feather-shaped endplates.
-  outlinedPart([[-8.6, -0.7], [-5.9, -1.5], [5.6, -2.15], [8.9, -1.25],
-    [9.2, 1.25], [5.6, 2.15], [-5.9, 1.5], [-8.6, 0.7]], 0.13, carbon, 0)
-    .rotateX(Math.PI / 2).position.y = 0.39;
-  function wing(x, y, span, chord) {
-    const wingShape = new THREE.Shape();
-    wingShape.moveTo(-chord * 0.5, 0);
-    wingShape.bezierCurveTo(-chord * 0.48, 0.22, chord * 0.12, 0.12, chord * 0.5, 0.015);
-    wingShape.bezierCurveTo(chord * 0.09, -0.08, -chord * 0.48, -0.1, -chord * 0.5, 0);
-    const geo = new THREE.ExtrudeGeometry(wingShape, {
-      depth: span, bevelEnabled: true, bevelSize: 0.022, bevelThickness: 0.028, bevelSegments: 2
-    });
-    mesh(geo, gold, x, y, -span / 2);
-  }
-  wing(-9.39, 0.46, 7.6, 1.37);
-  wing(8.27, 4.72, 6.2, 1.55);
-  for (const side of [-1, 1]) {
-    outlinedPart([[-10.04, 0.44], [-9.89, 0.78], [-8.65, 0.96], [-8.92, 0.42]],
-      0.095, gold, side * 3.79);
-    outlinedPart([[7.40, 4.30], [7.54, 4.90], [9.47, 5.26], [9.06, 4.43], [8.64, 4.26]],
-      0.12, teal, side * 3.08);
-    outlinedPart([[7.24, 3.0], [7.76, 4.73], [8.24, 4.73], [7.89, 3.0]],
-      0.14, teal, side * 1.02);
-  }
-
-  // Use the exact team mark as a painted decal that follows the body curvature.
-  const falcon = new Image();
-  falcon.onload = () => {
-    for (const side of [-1, 1]) {
-      const decal = document.createElement("canvas");
-      decal.width = 1024;
-      decal.height = 512;
-      const context = decal.getContext("2d");
-      context.fillStyle = "#d2dce0";
-      context.beginPath();
-      context.moveTo(18, 333);
-      context.bezierCurveTo(144, 110, 624, 39, 1008, 65);
-      context.bezierCurveTo(905, 292, 665, 409, 325, 465);
-      context.quadraticCurveTo(80, 498, 18, 333);
-      context.fill();
-      context.translate(side === 1 ? decal.width : 0, 0);
-      context.scale(side === 1 ? -1 : 1, 1);
-      context.translate(510, side === 1 ? 242 : 249);
-      context.rotate(side === 1 ? -0.37 : -0.68);
-      context.drawImage(falcon, -377, -250, 754, 540);
-      const texture = new THREE.CanvasTexture(decal);
-      texture.encoding = THREE.sRGBEncoding;
-      texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-      const patch = (u, v, offset) => {
-        const x = THREE.MathUtils.lerp(-3.9, 3.95, u);
-        return skin(x, side * (0.53 + v * 1.78 - u * 0.13), offset);
-      };
-      mesh(surface(60, 16, (u, v) => patch(u, v, 0.04)),
-        new THREE.MeshStandardMaterial({
-          map: texture, transparent: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.55
-        }));
-      render();
-    }
-  };
-  falcon.src = FALCON_DECAL;
-
-  function cylinder(r, depth, material, x, y, z, axis) {
-    const part = mesh(new THREE.CylinderGeometry(r, r, depth, 48), material, x, y, z);
-    if (axis === "x") part.rotation.z = Math.PI / 2;
-    if (axis === "z") part.rotation.x = Math.PI / 2;
-  }
-  cylinder(0.88, 0.22, carbon, 9.16, 1.98, 0, "x");
-  cylinder(0.73, 0.22, steel, 9.28, 1.98, 0, "x");
-  cylinder(0.27, 0.09, carbon, 9.42, 1.98, 0, "x");
-
-  const wheels = [
-    { x: -6.25, radius: 1.28, z: 3.03, width: 0.98 },
-    { x: 6.48, radius: 1.44, z: 3.18, width: 1.08 }
-  ];
-  for (const { x, radius, z, width } of wheels) {
-    cylinder(0.15, z * 2, steel, x, radius, 0, "z");
-    const tire = new THREE.LatheGeometry([
-      [0.69, -0.46], [0.92, -0.46], [0.98, -0.35], [1, -0.22],
-      [1, 0.22], [0.98, 0.35], [0.92, 0.46], [0.69, 0.46]
-    ].map(([r, axial]) => new THREE.Vector2(r * radius, axial * width)), 64);
-    tire.rotateX(Math.PI / 2);
-    for (const side of [-1, 1]) {
-      mesh(tire, rubber, x, radius, side * z);
-      cylinder(radius * 0.71, 0.08, carbon, x, radius, side * (z - width * 0.46), "z");
-      const face = side * (z + width * 0.46);
-      cylinder(radius * 0.72, 0.09, steel, x, radius, face, "z");
-      cylinder(radius * 0.20, 0.11, carbon, x, radius, face, "z");
-      cylinder(radius * 0.13, 0.13, steel, x, radius, face, "z");
+  const v3 = new T.Vector3(), bb = new T.Box3();
+  function placePins() {
+    const show = mode === "exploded" && explodeNow > 0.25;
+    pins.hidden = !show;
+    if (!show) return;
+    const w = box.clientWidth, h = box.clientHeight;
+    for (const p of car.parts) {
+      // anchor on the part's first piece (for pairs, the one nearest the camera side)
+      const it = p.items.length > 1 && camera.position.z < 0 && p.items[0].offset.z > 0 ? p.items[1] : p.items[0];
+      bb.setFromObject(it.obj).getCenter(v3).project(camera);
+      p.pin.style.transform = `translate(${(v3.x + 1) / 2 * w}px, ${(1 - v3.y) / 2 * h}px)`;
+      p.pin.hidden = v3.z > 1;
     }
   }
 
-  const shadowCanvas = document.createElement("canvas");
-  shadowCanvas.width = shadowCanvas.height = 128;
-  const ctx = shadowCanvas.getContext("2d");
-  const shade = ctx.createRadialGradient(64, 64, 3, 64, 64, 64);
-  shade.addColorStop(0, "#05090cf0");
-  shade.addColorStop(0.55, "#05090c99");
-  shade.addColorStop(1, "#05090c00");
-  ctx.fillStyle = shade;
-  ctx.fillRect(0, 0, 128, 128);
-  mesh(new THREE.PlaneGeometry(28, 11), new THREE.MeshBasicMaterial({
-    map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false
-  }), 0, 0.012, 0).rotation.x = -Math.PI / 2;
-
-  const flow = new THREE.Group();
-  scene.add(flow);
-  flow.visible = false;
+  /* ---------- Wind tunnel ---------- */
+  const flow = new T.Group(); flow.visible = false; scene.add(flow);
   const streams = [];
-  const throughColor = new THREE.Color(0x57d9ff).convertSRGBToLinear();
-  const wakeColor = new THREE.Color(0xffab47).convertSRGBToLinear();
-  const minX = -15, maxX = 16, samples = 128, trailLength = 9;
-  const smooth = THREE.MathUtils.smoothstep;
-  const streamMaterial = new THREE.LineBasicMaterial({
-    color: throughColor, opacity: 0.32, transparent: true, depthWrite: false, toneMapped: false
-  });
-  const wakeMaterial = streamMaterial.clone();
-  wakeMaterial.color.copy(wakeColor);
+  const minX = -16, maxX = 18, SAMPLES = 140;
+  let playing = !reduced.matches, playbackRate = 1, flowTime = 0, pressure = false;
+  let sparks, pressureMat;
 
-  // A kinematic model uses smooth obstacle envelopes and expanding wake traces.
+  // Colour ramp shared by the streamlines, the particles and the pressure map (slow/low → fast/high)
+  const RAMP = [0x2b4bff, 0x18b7ff, 0x35e6a0, 0xf5e23a, 0xff5a2b].map(lin);
+  function ramp(t, out) {
+    t = clamp(t, 0, 1) * (RAMP.length - 1);
+    const i = Math.min(RAMP.length - 2, Math.floor(t));
+    return out.copy(RAMP[i]).lerp(RAMP[i + 1], t - i);
+  }
+
+  // Kinematic model: streamlines ride over smooth envelopes of the body, wheels and rear wing.
+  // Returns position plus a relative speed (1 = free stream).
   function streamPath(x, inletY, inletZ) {
-    let y = inletY, z = inletZ;
+    let y = inletY, z = inletZ, speed = 1;
     const side = Math.sign(z) || 1;
-    const [bottom, top, width] = bodyAt(THREE.MathUtils.clamp(x, -10.1, 9.15));
-    const bodyFade = smooth(x, -12, -9.5) * (1 - smooth(x, 8.8, 13.8));
-    const distance = Math.abs(z);
-    if (distance < width + 0.35) {
-      const crossSection = Math.sqrt(Math.max(0, 1 - (distance / (width + 0.35)) ** 2));
-      const roof = (bottom + top) / 2 + ((top - bottom) / 2 + 0.38) * crossSection;
-      y += Math.max(0, roof - y) * bodyFade;
+    const [bottom, top, width] = A.bodyAt(clamp(x, -10.1, 9.15));
+    const bodyFade = smooth(x, -12.5, -9.3) * (1 - smooth(x, 8.8, 14.5));
+    const d = Math.abs(z), half = width * 1.2 + 0.45;
+    if (d < half) {
+      const cross = Math.sqrt(Math.max(0, 1 - (d / half) ** 2));
+      const roof = (bottom + top) / 2 + ((top - bottom) / 2 + 0.36) * cross;
+      const lift = Math.max(0, roof - y) * bodyFade;
+      y += lift;
+      speed += 0.5 * Math.min(1, lift) * smooth(x, -9, -2) * (1 - smooth(x, 6.5, 10));   // faster over the crown
+      speed -= 0.75 * Math.exp(-(((x + 10.6) / 1.1) ** 2)) * cross * (inletY < 1.4 ? 1 : 0.4); // stagnation at the nose
+      speed -= 0.45 * smooth(x, 9, 11) * (1 - smooth(x, 12, 17)) * cross * (inletY < 3.2 ? 1 : 0.3); // base wake
     }
-    for (const wheel of wheels) {
-      const dx = x - wheel.x;
-      const wheelEnvelope = smooth(dx, -3.35, -wheel.radius)
-        * (1 - smooth(dx, wheel.radius, 4.5));
-      const wheelHeight = 1 - smooth(y, wheel.radius * 2, wheel.radius * 2 + 0.5);
-      const lane = Math.abs(z) - wheel.z;
-      if (Math.abs(lane) >= 1.55) continue;
-      const clearance = wheel.width / 2 + 0.36;
-      const shift = Math.max(0, clearance - Math.abs(lane));
-      z += side * (Math.sign(lane) || 1) * shift * wheelEnvelope * wheelHeight;
+    for (const wh of A.WHEELS) {
+      const dx = x - wh.x, lane = Math.abs(z) - wh.z;
+      if (Math.abs(lane) >= 1.6) continue;
+      const env = smooth(dx, -3.4, -wh.radius) * (1 - smooth(dx, wh.radius, 4.8));
+      const hgt = 1 - smooth(y, wh.radius * 2, wh.radius * 2 + 0.5);
+      const shift = Math.max(0, wh.width / 2 + 0.38 - Math.abs(lane));
+      z += side * (Math.sign(lane) || 1) * shift * env * hgt;
+      speed += 0.35 * env * hgt * (shift > 0 ? 1 : 0);
+      speed -= 0.55 * smooth(dx, wh.radius, wh.radius + 0.6) * (1 - smooth(dx, 2.5, 6)) * hgt * (Math.abs(lane) < 0.6 ? 1 : 0);
     }
-    const rearWing = smooth(x, 5.9, 7.5) * (1 - smooth(x, 9, 12.2));
-    if (Math.abs(z) < 3.35 && y > 4.25 && y < 5.35) {
-      y += (y < 4.72 ? 4.22 - y : 5.36 - y) * rearWing;
+    const wing = smooth(x, 5.9, 7.5) * (1 - smooth(x, 9, 12.4));
+    if (Math.abs(z) < 3.35 && y > 4.9 && y < 6.1) {
+      const over = y >= 5.42;
+      y += (over ? 6.12 - y : 4.88 - y) * wing;
+      speed += (over ? 0.3 : -0.15) * wing;
     }
-    return [x, y, z];
+    return [x, y, z, clamp(speed, 0.12, 1.6)];
   }
 
-  function addStream(start, wake, path) {
-    const positions = new Float32Array((samples + 1) * 3);
-    for (let i = 0; i <= samples; i++) {
-      const t = i / samples;
-      positions.set(path(THREE.MathUtils.lerp(start, maxX, t), t), i * 3);
+  function addStream(start, path, radius) {
+    const pts = [], speeds = [];
+    for (let i = 0; i <= SAMPLES; i++) {
+      const t = i / SAMPLES, [x, y, z, s] = path(lerp(start, maxX, t), t);
+      pts.push(new T.Vector3(x, y, z)); speeds.push(s);
     }
-    const track = new THREE.BufferGeometry();
-    track.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    flow.add(new THREE.Line(track, wake ? wakeMaterial : streamMaterial));
+    const tube = new T.TubeGeometry(new T.CatmullRomCurve3(pts), SAMPLES, radius, 5, false);
+    const col = [], c = new T.Color(), per = 6;
+    for (let i = 0; i <= SAMPLES; i++) {
+      ramp(0.5 + (speeds[i] - 1) * 0.9, c);
+      const fade = smooth(i, 0, 10) * (1 - smooth(i, SAMPLES - 14, SAMPLES)) * 0.36;
+      for (let k = 0; k < per; k++) col.push(c.r * fade, c.g * fade, c.b * fade);
+    }
+    tube.setAttribute("color", new T.Float32BufferAttribute(col, 3));
+    flow.add(new T.Mesh(tube, streamMat));
+    streams.push({ pts, speeds, phase: (streams.length * 0.618034) % 1 });
+  }
+  const streamMat = new T.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false });
 
-    const trail = new THREE.BufferGeometry();
-    const moving = new THREE.BufferAttribute(new Float32Array(trailLength * 3), 3);
-    moving.setUsage(THREE.DynamicDrawUsage);
-    trail.setAttribute("position", moving);
-    const pulse = new THREE.Line(trail, new THREE.LineBasicMaterial({
-      color: wake ? wakeColor : throughColor, transparent: true, depthWrite: false, opacity: 0.9, toneMapped: false
+  function buildFlow() {
+    for (const y of [0.7, 1.4, 2.2, 3.1, 4.1, 5.15, 5.75, 6.8])
+      for (const z of [-5.4, -4.2, -3.1, -2.2, -1.2, -0.4, 0.4, 1.2, 2.2, 3.1, 4.2, 5.4])
+        addStream(minX, x => streamPath(x, y, z), 0.022);
+    const swirl = (start, y, z, spread, phase) => addStream(start, (x, t) => {
+      const r = spread * (0.12 + 0.88 * t), a = t * 15 + phase;
+      return [x, Math.max(0.15, y + Math.cos(a) * r), z + Math.sin(a) * r, 0.3 + 0.35 * t];
+    }, 0.018);
+    for (const wh of A.WHEELS) for (const s of [-1, 1]) for (const ph of [0, 2.1, 4.2])
+      swirl(wh.x + wh.radius + 0.05, wh.radius, s * wh.z, 0.6, ph);
+    for (const s of [-1, 1]) for (const ph of [0, Math.PI]) swirl(9.6, 5.45, s * 3.08, 0.5, ph + s);
+    for (const ph of [0, 2.1, 4.2]) swirl(9.5, 2.0, 0, 0.85, ph);
+
+    // Glowing particles that ride each streamline at its local speed
+    const PER = 5, TRAIL = 7, count = streams.length * PER * TRAIL;
+    const geo = new T.BufferGeometry();
+    geo.setAttribute("position", new T.BufferAttribute(new Float32Array(count * 3), 3).setUsage(T.DynamicDrawUsage));
+    geo.setAttribute("color", new T.BufferAttribute(new Float32Array(count * 3), 3).setUsage(T.DynamicDrawUsage));
+    const dot = A.canvas(64, 64), g = dot.getContext("2d"), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    grad.addColorStop(0, "#fff"); grad.addColorStop(0.25, "rgba(255,255,255,.75)"); grad.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+    sparks = new T.Points(geo, new T.PointsMaterial({
+      size: 0.34, map: new T.CanvasTexture(dot), vertexColors: true, transparent: true,
+      blending: T.AdditiveBlending, depthWrite: false, toneMapped: false, fog: false, sizeAttenuation: true
     }));
-    pulse.frustumCulled = false;
-    flow.add(pulse);
-    streams.push({ positions, moving, wake, phase: (streams.length * 0.618034) % 1 });
+    sparks.frustumCulled = false; sparks.userData = { PER, TRAIL };
+    flow.add(sparks);
+    // each particle remembers how far along its line it is
+    for (const s of streams) s.at = Array.from({ length: PER }, (_, k) => ((s.phase + k / PER) % 1) * SAMPLES);
   }
-
-  for (const y of [0.88, 1.65, 2.75, 4.4, 5.45]) {
-    for (const z of [-5.2, -3.65, -2.62, -1.28, 0, 1.28, 2.62, 3.65, 5.2]) {
-      addStream(minX, false, x => streamPath(x, y, z));
-    }
-  }
-  function wakePair(start, y, z, spread, phase) {
-    addStream(start, true, (x, t) => {
-      const radius = spread * (0.15 + 0.85 * t);
-      const angle = t * 13 + phase;
-      return [x, y + Math.cos(angle) * radius, z + Math.sin(angle) * radius];
-    });
-  }
-  for (const wheel of wheels) {
-    for (const side of [-1, 1]) {
-      for (const phase of [0, Math.PI]) {
-        wakePair(wheel.x + wheel.radius + 0.05, wheel.radius, side * wheel.z, 0.55, phase);
+  const pc = new T.Color();
+  function moveSparks(dt) {
+    const { PER, TRAIL } = sparks.userData, pos = sparks.geometry.attributes.position, col = sparks.geometry.attributes.color;
+    let n = 0;
+    for (const s of streams) for (let k = 0; k < PER; k++) {
+      const i0 = Math.min(SAMPLES - 1, Math.floor(s.at[k]));
+      s.at[k] += dt * 34 * s.speeds[i0];
+      if (s.at[k] >= SAMPLES) s.at[k] -= SAMPLES;
+      for (let j = 0; j < TRAIL; j++, n++) {
+        const p = Math.max(0, s.at[k] - j * 0.55 * (0.4 + s.speeds[i0])), i = Math.min(SAMPLES - 1, Math.floor(p)), f = p - i;
+        const a = s.pts[i], b = s.pts[i + 1];
+        pos.setXYZ(n, lerp(a.x, b.x, f), lerp(a.y, b.y, f), lerp(a.z, b.z, f));
+        const fade = (1 - j / TRAIL) ** 1.6 * smooth(p, 0, 8) * (1 - smooth(p, SAMPLES - 12, SAMPLES));
+        ramp(0.5 + (s.speeds[i] - 1) * 0.9, pc);
+        col.setXYZ(n, pc.r * fade, pc.g * fade, pc.b * fade);
       }
     }
-  }
-  for (const side of [-1, 1]) {
-    wakePair(9.5, 4.63, side * 3.08, 0.48, side * Math.PI / 2);
+    pos.needsUpdate = col.needsUpdate = true;
   }
 
-  function moveTracers(time) {
-    for (const { positions, moving, phase, wake } of streams) {
-      const tip = ((time * (wake ? 0.44 : 0.34) + phase) % 1) * samples;
-      for (let i = 0; i < trailLength; i++) {
-        const point = Math.max(0, tip - trailLength + 1 + i);
-        const floor = Math.floor(point);
-        const a = floor * 3;
-        const b = Math.min(samples, floor + 1) * 3;
-        moving.setXYZ(i,
-          THREE.MathUtils.lerp(positions[a], positions[b], point - floor),
-          THREE.MathUtils.lerp(positions[a + 1], positions[b + 1], point - floor),
-          THREE.MathUtils.lerp(positions[a + 2], positions[b + 2], point - floor));
-      }
-      moving.needsUpdate = true;
+  // Surface pressure estimate from how squarely each patch of skin faces the oncoming air
+  function buildPressure() {
+    const geo = car.bodyMesh.geometry, nrm = geo.attributes.normal, col = [], c = new T.Color();
+    for (let i = 0; i < nrm.count; i++) {
+      const nx = nrm.getX(i), v = 0.42 - nx * 1.5;   // windward slopes high, leeward slopes low
+      ramp(v, c); col.push(c.r, c.g, c.b);
     }
+    geo.setAttribute("color", new T.Float32BufferAttribute(col, 3));
+    pressureMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, envMapIntensity: 0.25 });
   }
 
-  const views = {
-    perspective: [-0.56, 0.3], side: [0, 0.08],
-    front: [-Math.PI / 2, 0.11], top: [0, 1.56]
-  };
-  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
-  let [yaw, pitch] = views.perspective;
-  let spin = false, drag = null, playing = !reducedMotion.matches;
-  let playbackRate = 1, flowTime = 0, frame = 0, previousFrame;
-  let onScreen = true;
+  /* ---------- Modes ---------- */
+  const modeBtns = [...document.querySelectorAll("[data-mode]")], panels = [...document.querySelectorAll("[data-panel]")];
+  const legend = document.getElementById("flow-legend"), spinBtn = document.querySelector('[data-view="spin"]');
+  function setSpin(on) { spin = on; spinBtn.setAttribute("aria-pressed", on); }
+  function setPressure(on) {
+    pressure = on;
+    document.getElementById("pressure-toggle").setAttribute("aria-pressed", on);
+    car.bodyMesh.material = on && mode === "airflow" ? pressureMat : car.paint;
+    legend.querySelector("[data-lo]").textContent = on ? "low pressure / slow" : "slow";
+    legend.querySelector("[data-hi]").textContent = on ? "high pressure / fast" : "fast";
+  }
+  function setMode(m) {
+    mode = m;
+    modeBtns.forEach(b => b.setAttribute("aria-selected", b.dataset.mode === m));
+    panels.forEach(p => { p.hidden = p.dataset.panel !== m; });
+    flow.visible = m === "airflow"; legend.hidden = m !== "airflow";
+    explodeT = m === "exploded" ? slider.value / 100 : 0;
+    if (m !== "exploded" && selected) select(selected);
+    setPressure(pressure);
+    if (m === "airflow") { [yawT, pitchT] = [-0.3, 0.36]; setSpin(false); }
+    if (m === "exploded") { [yawT, pitchT] = [-0.72, 0.42]; setSpin(false); }
+    if (m === "studio") { [yawT, pitchT] = views.perspective; }
+    zoomT = 1;
+    note.textContent = m === "exploded" ? "Drag to rotate · scroll to zoom · click a part" : "Drag to rotate · scroll to zoom";
+  }
 
-  function render() {
-    pitch = THREE.MathUtils.clamp(pitch, 0.03, 1.56);
-    const distance = (flow.visible ? 41 : 30) * Math.max(1, 1.62 / camera.aspect);
-    const target = new THREE.Vector3(flow.visible ? 0.6 : 0, flow.visible ? 2.45 : 2.06, 0);
-    camera.position.set(
-      target.x + distance * Math.cos(pitch) * Math.sin(yaw),
-      target.y + distance * Math.sin(pitch),
-      distance * Math.cos(pitch) * Math.cos(yaw));
-    camera.lookAt(target);
+  /* ---------- Loop ---------- */
+  let last, onScreen = true, raf = 0;
+  function frame(now) {
+    raf = 0;
+    const dt = last === undefined ? 0 : Math.min(0.05, (now - last) / 1000); last = now;
+    const k = 1 - Math.exp(-dt * 7);
+    if (spin && !drag) yawT += dt * 0.25;
+    yaw += (yawT - yaw) * k; pitch += (pitchT - pitch) * k; zoom += (zoomT - zoom) * k;
+    explodeNow += (explodeT - explodeNow) * (1 - Math.exp(-dt * 5));
+    if (car) {
+      car.explode(explodeNow);
+      rig.position.y = explodeNow * 2.4;
+      if (mode === "airflow" && playing) {
+        flowTime += dt * playbackRate; moveSparks(dt * playbackRate);
+        for (const w of car.wheels) w.spin.rotation.z += dt * playbackRate * 9;
+      }
+    }
+    grid.material.opacity += ((mode === "airflow" ? 0.55 : 0) - grid.material.opacity) * k;
+    if (mode === "airflow" && playing) grid.position.x = (flowTime * 6) % 2;
+
+    dist += (DIST[mode] * Math.max(1, 1.55 / camera.aspect) * zoom - dist) * k;
+    tgtY += ((mode === "exploded" ? 2 + explodeNow * 4.6 : mode === "airflow" ? 2.6 : 2.0) - tgtY) * k;
+    const tx = mode === "exploded" ? explodeNow * 2.6 : mode === "airflow" ? 0.8 : 0;
+    camera.position.set(tx + dist * Math.cos(pitch) * Math.sin(yaw), tgtY + dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(yaw));
+    camera.lookAt(tx, tgtY, 0);
     renderer.render(scene, camera);
-  }
-  function animate(timestamp) {
-    frame = 0;
-    const step = previousFrame === undefined ? 0 : Math.min(0.05, (timestamp - previousFrame) / 1000);
-    previousFrame = timestamp;
-    if (spin) yaw += step * 0.32;
-    if (flow.visible && playing) {
-      flowTime += step * playbackRate;
-      moveTracers(flowTime);
-    }
-    render();
+    if (car) placePins();
     schedule();
   }
   function schedule() {
-    const active = onScreen && !document.hidden && (spin || (flow.visible && playing));
-    if (active && !frame) frame = requestAnimationFrame(animate);
-    if (!active) {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      previousFrame = undefined;
-    }
+    const active = onScreen && !document.hidden;
+    if (active && !raf) raf = requestAnimationFrame(frame);
+    if (!active) { cancelAnimationFrame(raf); raf = 0; last = undefined; }
   }
   function resize() {
-    const { clientWidth: width, clientHeight: height } = box;
-    if (!width || !height) return;
-    renderer.setSize(width, height, false);
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-    render();
+    const w = box.clientWidth, h = box.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (car) renderer.render(scene, camera);
   }
   new ResizeObserver(resize).observe(box);
-  new IntersectionObserver(([entry]) => {
-    onScreen = entry.isIntersecting;
-    schedule();
-  }).observe(box);
+  new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; schedule(); }).observe(box);
   document.addEventListener("visibilitychange", schedule);
 
-  const spinButton = document.querySelector('[data-view="spin"]');
-  function setSpin(enabled) {
-    spin = enabled;
-    spinButton.setAttribute("aria-pressed", enabled);
-    schedule();
+  /* ---------- Input ---------- */
+  const ray = new T.Raycaster(), mouse = new T.Vector2();
+  function partAt(ev) {
+    const r = box.getBoundingClientRect();
+    mouse.set((ev.clientX - r.left) / r.width * 2 - 1, -(ev.clientY - r.top) / r.height * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    const hit = ray.intersectObject(car.group, true)[0];
+    return hit ? hit.object.userData.part : null;
   }
-  box.addEventListener("pointerdown", event => {
-    if (drag || event.button !== 0) return;
-    drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
-    box.setPointerCapture(event.pointerId);
-    setSpin(false);
+  box.addEventListener("pointerdown", ev => {
+    if (drag || ev.button !== 0 || ev.target.closest("button")) return;
+    drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, moved: 0 };
+    box.setPointerCapture(ev.pointerId); setSpin(false);
   });
-  box.addEventListener("pointermove", event => {
-    if (!drag || drag.id !== event.pointerId) return;
-    yaw -= (event.clientX - drag.x) * 0.008;
-    pitch += (event.clientY - drag.y) * 0.006;
-    drag.x = event.clientX;
-    drag.y = event.clientY;
-    render();
+  box.addEventListener("pointermove", ev => {
+    if (!drag || drag.id !== ev.pointerId) return;
+    const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+    yawT -= dx * 0.008; pitchT = clamp(pitchT + dy * 0.006, 0.03, 1.52);
+    drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = ev.clientX; drag.y = ev.clientY;
+  });
+  box.addEventListener("pointerup", ev => {
+    if (drag && drag.moved < 5 && mode === "exploded" && car) { const p = partAt(ev); if (p) select(p); }
   });
   box.addEventListener("lostpointercapture", () => { drag = null; });
-  document.querySelectorAll("[data-view]").forEach(button => {
-    button.addEventListener("click", () => {
-      const view = button.dataset.view;
-      if (view === "spin") {
-        setSpin(!spin);
-        return;
-      }
-      [yaw, pitch] = views[view];
-      setSpin(false);
-      render();
-    });
-  });
+  box.addEventListener("wheel", ev => { ev.preventDefault(); zoomT = clamp(zoomT * (1 + Math.sign(ev.deltaY) * 0.1), 0.5, 1.6); }, { passive: false });
 
-  const toggle = document.getElementById("airflow-toggle");
-  const options = document.getElementById("airflow-options");
-  const pause = document.getElementById("flow-pause");
-  const speed = document.getElementById("flow-speed");
-  const rate = document.getElementById("flow-rate");
-  function setPlaying(enabled) {
-    playing = enabled;
-    pause.textContent = enabled ? "Pause flow" : "Play flow";
-    schedule();
-  }
-  toggle.addEventListener("click", () => {
-    flow.visible = !flow.visible;
-    toggle.setAttribute("aria-pressed", flow.visible);
-    options.hidden = !flow.visible;
-    if (flow.visible) {
-      [yaw, pitch] = [-0.28, 0.43];
-      setSpin(false);
-    }
-    render();
-    schedule();
-  });
-  pause.addEventListener("click", () => setPlaying(!playing));
-  speed.addEventListener("input", () => {
-    playbackRate = Number(speed.value);
-    rate.value = playbackRate + "×";
-  });
-  reducedMotion.addEventListener("change", event => {
-    if (event.matches) {
-      setSpin(false);
-      setPlaying(false);
-    }
-  });
+  document.querySelectorAll("[data-view]").forEach(b => b.addEventListener("click", () => {
+    if (b.dataset.view === "spin") return setSpin(!spin);
+    [yawT, pitchT] = views[b.dataset.view];
+    yawT += Math.round((yaw - yawT) / (Math.PI * 2)) * Math.PI * 2;   // take the short way round
+    setSpin(false);
+  }));
+  modeBtns.forEach(b => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  slider.addEventListener("input", () => { explodeT = slider.value / 100; document.getElementById("explode-out").value = slider.value + "%"; });
+  const pause = document.getElementById("flow-pause"), speed = document.getElementById("flow-speed");
+  pause.addEventListener("click", () => { playing = !playing; pause.textContent = playing ? "Pause flow" : "Play flow"; });
+  speed.addEventListener("input", () => { playbackRate = +speed.value; document.getElementById("flow-rate").value = playbackRate + "×"; });
+  document.getElementById("pressure-toggle").addEventListener("click", () => setPressure(!pressure));
+  reduced.addEventListener("change", e => { if (e.matches) { setSpin(false); playing = false; pause.textContent = "Play flow"; } });
 
-  moveTracers(flowTime);
-  setPlaying(playing);
+  /* ---------- Go ---------- */
+  A.loadFalcon(falcon => {
+    car = A.buildCar({ falcon, detail: "high" });
+    car.paint = car.bodyMesh.material;
+    rig.add(car.group);
+    buildPartUI(); buildFlow(); buildPressure();
+    moveSparks(0);
+    pause.textContent = playing ? "Pause flow" : "Play flow";
+    select(null); selected = null;
+    setSpin(spin); setMode("studio");
+    document.getElementById("lab-controls").hidden = false;
+    resize(); frame(performance.now());
+  });
   resize();
-  document.getElementById("car-views").hidden = false;
-  note.textContent = "Drag to rotate";
 })();
