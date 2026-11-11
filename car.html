@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Car | TA-aero</title>
-<meta name="description" content="How a STEM Racing car works, a 3D concept model, and a time attack simulator you can tune and race.">
+<meta name="description" content="How a STEM Racing car works, a 3D concept model, an airflow visualization, and a time attack simulator you can tune and race.">
 <link rel="icon" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
@@ -19,6 +19,39 @@
       <p class="eyebrow">The car</p>
       <h1>20 metres. One second.</h1>
       <p>No engine, no driver, no steering. Just a block of foam, a puff of CO₂ and a lot of thinking about air.</p>
+    </div>
+  </section>
+
+  <section class="band band--paper" id="3d">
+    <div class="wrap stack-lg">
+      <div class="split">
+        <h2>Streamlined concept</h2>
+        <p>A tapered nose and rounded cartridge housing guide air over the body. Narrow wings and an undercut between the wheels leave room for air to pass around it.</p>
+      </div>
+      <img class="concept-render" src="images/car-concept.jpg" width="1536" height="1024" alt="Teal STEM Racing car with the diving falcon painted on its side, yellow wings and four exposed wheels">
+      <div class="stack">
+        <h3>3D model and wind tunnel</h3>
+        <div class="viewer" id="viewer">
+          <span class="note" role="status">Loading the 3D model…</span>
+        </div>
+        <div class="chips" id="car-views" role="group" aria-label="Model controls" hidden>
+          <button class="chip" data-view="perspective" type="button">Three-quarter</button>
+          <button class="chip" data-view="side" type="button">Side</button>
+          <button class="chip" data-view="front" type="button">Front</button>
+          <button class="chip" data-view="top" type="button">Top</button>
+          <button class="chip" data-view="spin" type="button" aria-pressed="false">Auto-spin</button>
+          <button class="chip" id="airflow-toggle" type="button" aria-pressed="false" aria-controls="airflow-options">Airflow</button>
+        </div>
+        <div class="stack" id="airflow-options" hidden>
+          <div class="airflow-controls">
+            <label for="flow-speed">Flow playback speed</label>
+            <input id="flow-speed" type="range" min="0.25" max="2" step="0.25" value="1">
+            <output id="flow-rate" for="flow-speed">1×</output>
+            <button class="chip" id="flow-pause" type="button">Pause flow</button>
+          </div>
+          <p class="muted">Cyan traces show air moving from nose to tail. Amber traces mark the modeled wake behind the wheels and rear wing. Paths are illustrative estimates.</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -76,27 +109,6 @@
         <li><b>Wheels</b><span>Four of them, all must touch the track. Low-friction bearings and light rims save hundredths of a second.</span></li>
         <li><b>Tether guides</b><span>Two small eyelets under the car. A line runs through them down the whole track to keep the car straight.</span></li>
       </ul>
-    </div>
-  </section>
-
-  <section class="band band--paper" id="3d">
-    <div class="wrap stack-lg">
-      <div class="split">
-        <div class="stack">
-          <p class="eyebrow">3D view</p>
-          <h2>Spin it around</h2>
-        </div>
-        <p>This is a simple concept model in our team colours, built to show the layout of a STEM Racing car. Our real CAD model will replace it once the first prototype is finished.</p>
-      </div>
-      <div class="stack">
-        <div class="viewer" id="viewer"><span class="note">Drag to rotate · concept model, not our final car</span></div>
-        <div class="chips" role="group" aria-label="Camera views">
-          <button class="chip" data-view="side">Side</button>
-          <button class="chip" data-view="front">Front</button>
-          <button class="chip" data-view="top">Top</button>
-          <button class="chip" data-view="spin" aria-pressed="true">Auto-spin</button>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -188,6 +200,7 @@
 <script src="js/site.js"></script>
 <script src="js/sim.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="js/falcon-decal.js"></script>
 <script src="js/car3d.js"></script>
 </body>
 </html>

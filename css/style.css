@@ -330,3 +330,26 @@ details p { margin-top: 0.6rem; color: var(--muted); }
 #site-footer a { color: var(--on-dark); }
 #site-footer .brand .logo { width: 80px; height: 56px; }
 .foot-nav { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; }
+
+/* ---------- Car concept and wind tunnel ---------- */
+.concept-render {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+.viewer {
+  background: radial-gradient(ellipse at 50% 35%, #263b4f, #0c1521 75%);
+}
+.viewer .note {
+  color: #d8e7f0;
+  background: #101b27e8;
+  padding: 0.25rem 0.55rem;
+  border-radius: 4px;
+  pointer-events: none;
+}
+#car-views[hidden], #airflow-options[hidden] { display: none; }
+#airflow-toggle { border-color: var(--navy); }
+#airflow-toggle[aria-pressed="true"] { background: var(--navy); }
+.airflow-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; }
+.airflow-controls input { width: clamp(6rem, 24vw, 12rem); accent-color: var(--navy); }
+.airflow-controls output { min-width: 4ch; font-family: var(--mono); }
