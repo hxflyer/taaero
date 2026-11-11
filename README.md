@@ -1,6 +1,6 @@
 # TA-aero website
 
-Open `index.html` in a browser. No build step.
+Open [index.html](index.html) in a browser to preview the site locally. No build step is required.
 
 ## Editing
 - **Contact details**: top of `js/site.js` (`CONFIG`). Only the ones you fill in are shown on the Contact page.
