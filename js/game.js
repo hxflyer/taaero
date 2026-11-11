@@ -18,39 +18,122 @@
   stage.prepend(renderer.domElement);
 
   const scene = new T.Scene();
-  const HAZE = lin(0xcfe0ee);
-  scene.fog = new T.Fog(HAZE, 180, 1250);
-  scene.environment = A.makeEnvironment(renderer, "sky");
-  const sky = A.gradientDome(1800, A.SKY); scene.add(sky);
-  const camera = new T.PerspectiveCamera(62, 16 / 9, 0.3, 2600);
+  const HAZE = lin(0xc4d3de);
+  scene.fog = new T.Fog(HAZE, 260, 3400);
+  const camera = new T.PerspectiveCamera(62, 16 / 9, 0.3, 14000);
 
-  scene.add(new T.HemisphereLight(0xcfe6ff, 0x5d6b47, 0.75));
-  const sun = new T.DirectionalLight(0xfff0d6, 1.9);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.05;
-  Object.assign(sun.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 10, far: 320 });
+  // Late-afternoon sun, low and ahead of the start straight
+  const SUN = new T.Vector3().setFromSphericalCoords(1, T.MathUtils.degToRad(90 - 21), T.MathUtils.degToRad(112));
+  function makeSky() {
+    if (!T.Sky) return A.gradientDome(5000, A.SKY);
+    const sk = new T.Sky(); sk.scale.setScalar(10000);
+    const u = sk.material.uniforms;
+    u.turbidity.value = 4.5; u.rayleigh.value = 1.35; u.mieCoefficient.value = 0.004; u.mieDirectionalG.value = 0.84; u.sunPosition.value.copy(SUN);
+    return sk;
+  }
+  const sky = makeSky(); scene.add(sky);
+  { // reflections and ambient light come from the same sky
+    const es = new T.Scene(); es.add(makeSky());
+    const land = new T.Mesh(new T.CircleGeometry(4000, 24), new T.MeshBasicMaterial({ color: lin(0x4c5a37) }));
+    land.rotation.x = -Math.PI / 2; land.position.y = -6; es.add(land);
+    const pm = new T.PMREMGenerator(renderer); scene.environment = pm.fromScene(es, 0, 1, 12000).texture; pm.dispose();
+  }
+  renderer.toneMappingExposure = T.Sky ? 0.55 : 0.95;
+
+  scene.add(new T.HemisphereLight(0xb9d6ff, 0x57603c, 0.55));
+  const sun = new T.DirectionalLight(0xffdfb0, 3.6);
+  const SHADOW = Math.min(4096, renderer.capabilities.maxTextureSize);
+  sun.castShadow = true; sun.shadow.mapSize.set(SHADOW, SHADOW); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.04; sun.shadow.radius = 2.5;
+  Object.assign(sun.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 20, far: 700 });
   scene.add(sun, sun.target);
-  const SUN_DIR = new T.Vector3(70, 110, 45);
+  const SUN_DIR = SUN.clone().multiplyScalar(330);
+
+  /* ---------- Post-processing: bloom, speed blur, colour grade ---------- */
+  let composer = null, finalPass = null, quality = "high";
+  const FINAL = {
+    uniforms: { tDiffuse: { value: null }, uBlur: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `
+      uniform sampler2D tDiffuse; uniform float uBlur, uTime; varying vec2 vUv;
+      vec3 tap(vec2 uv, vec2 d, float ca) {
+        return vec3(texture2D(tDiffuse, uv + d * ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - d * ca).b);
+      }
+      void main() {
+        vec2 d = vUv - vec2(0.5, 0.46); float r = length(d);
+        float edge = smoothstep(0.12, 0.8, r);
+        vec3 c = vec3(0.0);
+        for (int i = 0; i < 10; i++) c += tap(vUv - d * (float(i) / 10.0) * uBlur * edge, d, 0.006 * r);   // radial speed blur + slight lens fringe
+        c /= 10.0;
+        c = pow(max(c, 0.0), vec3(1.0 / 2.2));
+        float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(l), c, 1.16);                                  // saturation
+        c = (c - 0.5) * 1.08 + 0.5;                                 // contrast
+        c = mix(c * vec3(0.96, 1.0, 1.06), c * vec3(1.05, 1.0, 0.94), smoothstep(0.25, 0.8, l));   // cool shadows, warm highlights
+        c *= 1.0 - smoothstep(0.42, 1.0, r) * 0.5;                  // vignette
+        c += (fract(sin(dot(vUv * vec2(1733.0, 977.0) + uTime, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.016;   // fine grain
+        gl_FragColor = vec4(c, 1.0);
+      }`
+  };
+  function buildComposer() {
+    if (!T.EffectComposer || !T.UnrealBloomPass || !T.ShaderPass) return;
+    try {
+      const size = renderer.getDrawingBufferSize(new T.Vector2());
+      const gl2 = renderer.capabilities.isWebGL2;
+      if (gl2) renderer.extensions.get("EXT_color_buffer_float");
+      const RT = gl2 && T.WebGLMultisampleRenderTarget ? T.WebGLMultisampleRenderTarget : T.WebGLRenderTarget;
+      const target = new RT(size.x, size.y, { type: gl2 ? T.HalfFloatType : T.UnsignedByteType, format: T.RGBAFormat, minFilter: T.LinearFilter, magFilter: T.LinearFilter });
+      if (RT !== T.WebGLRenderTarget) target.samples = 4;
+      composer = new T.EffectComposer(renderer, target);
+      composer.addPass(new T.RenderPass(scene, camera));
+      composer.addPass(new T.UnrealBloomPass(new T.Vector2(size.x / 2, size.y / 2), 0.3, 0.7, 0.86));
+      finalPass = new T.ShaderPass(FINAL); composer.addPass(finalPass);
+    } catch (e) { composer = null; }
+  }
+  buildComposer();
 
   /* ---------- Textures ---------- */
   const rnd = (a, b) => a + Math.random() * (b - a);
+  const MAXA = renderer.capabilities.getMaxAnisotropy();
   function noiseTex(size, base, specks, repeat) {
     const c = A.canvas(size, size), g = c.getContext("2d");
     g.fillStyle = base; g.fillRect(0, 0, size, size);
     for (const [color, n, r] of specks) { g.fillStyle = color; for (let i = 0; i < n; i++) g.fillRect(Math.random() * size, Math.random() * size, rnd(1, r), rnd(1, r)); }
     return [c, g, repeat];
   }
-  function bake([c, , repeat]) { const t = A.tex(c, repeat || [1, 1]); t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t; }
+  function bake([c, , repeat]) { const t = A.tex(c, repeat || [1, 1]); t.anisotropy = MAXA; return t; }
+  // Turn a greyscale bump canvas into a tangent-space normal map
+  function normalMap(size, draw, strength, repeat) {
+    const c = A.canvas(size, size), g = c.getContext("2d"); draw(g, size);
+    const src = g.getImageData(0, 0, size, size), out = g.createImageData(size, size), h = (x, y) => src.data[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const dx = (h(x + 1, y) - h(x - 1, y)) * strength, dy = (h(x, y + 1) - h(x, y - 1)) * strength, l = Math.hypot(dx, dy, 1), i = (y * size + x) * 4;
+      out.data[i] = (-dx / l * 0.5 + 0.5) * 255; out.data[i + 1] = (dy / l * 0.5 + 0.5) * 255; out.data[i + 2] = (1 / l * 0.5 + 0.5) * 255; out.data[i + 3] = 255;
+    }
+    g.putImageData(out, 0, 0);
+    const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(...repeat); t.anisotropy = MAXA; return t;
+  }
+  const grit = (g, n) => { g.fillStyle = "#808080"; g.fillRect(0, 0, n, n); for (let i = 0; i < n * n * 0.6; i++) { const v = Math.random() * 255 | 0; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * n, Math.random() * n, rnd(1, 2.4), rnd(1, 2.4)); } };
 
-  const asphalt = noiseTex(512, "#34373c", [["rgba(255,255,255,0.05)", 5000, 3], ["rgba(0,0,0,0.16)", 5000, 3]]);
+  const asphalt = noiseTex(1024, "#3a3d42", [["rgba(255,255,255,0.045)", 26000, 3], ["rgba(0,0,0,0.14)", 26000, 3]]);
   { const g = asphalt[1];
-    g.fillStyle = "rgba(18,18,20,0.35)"; g.fillRect(150, 0, 60, 512); g.fillRect(300, 0, 60, 512);          // rubbered-in racing lines
-    g.fillStyle = "#e9ecee"; g.fillRect(14, 0, 12, 512); g.fillRect(486, 0, 12, 512);                      // edge lines
-    g.fillRect(252, 0, 8, 250); }                                                                          // centre dashes
-  const kerb = noiseTex(64, "#d8322a", []); kerb[1].fillStyle = "#f2f2f2"; kerb[1].fillRect(0, 0, 64, 32);
-  const grass = noiseTex(256, "#4d7a35", [["rgba(110,160,70,0.5)", 2600, 4], ["rgba(40,80,30,0.5)", 2600, 4]], [500, 500]);
-  const verge = noiseTex(256, "#5b8a3d", [["rgba(140,180,90,0.4)", 2400, 4], ["rgba(50,90,35,0.4)", 2000, 4]]);
-  const wall = noiseTex(128, "#c9ced3", [["rgba(0,0,0,0.06)", 500, 6]]);
-  { const g = wall[1]; g.fillStyle = "#0a566b"; g.fillRect(0, 70, 128, 34); g.fillStyle = "#ffb000"; g.fillRect(0, 104, 128, 8); g.fillStyle = "#8d949b"; g.fillRect(0, 0, 128, 6); }
+    for (const [x, w, a] of [[300, 150, 0.2], [585, 150, 0.2], [345, 60, 0.16], [630, 60, 0.16]]) {      // rubbered-in racing lines, soft edged
+      const gr = g.createLinearGradient(x, 0, x + w, 0); gr.addColorStop(0, "rgba(12,12,14,0)"); gr.addColorStop(0.5, `rgba(12,12,14,${a})`); gr.addColorStop(1, "rgba(12,12,14,0)");
+      g.fillStyle = gr; g.fillRect(x, 0, w, 1024);
+    }
+    g.strokeStyle = "rgba(10,10,12,0.22)"; g.lineWidth = 2;                                              // repair seams and cracks
+    for (let i = 0; i < 7; i++) { g.beginPath(); let x = rnd(60, 960), y = rnd(0, 1024); g.moveTo(x, y); for (let k = 0; k < 9; k++) g.lineTo(x += rnd(-22, 22), y += rnd(20, 60)); g.stroke(); }
+    g.fillStyle = "#eceff1"; g.fillRect(26, 0, 22, 1024); g.fillRect(976, 0, 22, 1024);                 // edge lines
+    g.fillRect(505, 0, 14, 480);                                                                         // centre dashes
+    g.fillStyle = "rgba(58,61,66,0.35)"; for (let i = 0; i < 500; i++) g.fillRect(rnd(20, 1004), rnd(0, 1024), 3, 3);   // worn paint
+  }
+  const kerb = noiseTex(64, "#d8322a", [["rgba(0,0,0,0.12)", 90, 4]]); kerb[1].fillStyle = "#f2f2f2"; kerb[1].fillRect(0, 0, 64, 32); kerb[1].fillStyle = "rgba(0,0,0,0.08)"; for (let i = 0; i < 60; i++) kerb[1].fillRect(Math.random() * 64, Math.random() * 64, 3, 2);
+  const grass = noiseTex(512, "#b9c2a8", [["rgba(235,245,215,0.5)", 16000, 3], ["rgba(120,135,95,0.55)", 16000, 3], ["rgba(150,140,100,0.25)", 500, 9]], [900, 900]);
+  const verge = noiseTex(512, "#4f7d36", [["rgba(150,190,95,0.4)", 12000, 3], ["rgba(45,85,32,0.4)", 12000, 3]]);
+  { const g = verge[1]; for (let y = 0; y < 512; y += 128) { g.fillStyle = "rgba(255,255,220,0.07)"; g.fillRect(0, y, 512, 64); } }   // mowing stripes
+  const wall = noiseTex(256, "#cfd4d8", [["rgba(0,0,0,0.07)", 1800, 5], ["rgba(60,40,20,0.08)", 60, 30]]);
+  { const g = wall[1]; g.fillStyle = "#0a566b"; g.fillRect(0, 140, 256, 70); g.fillStyle = "#ffb000"; g.fillRect(0, 210, 256, 14); g.fillStyle = "#7d858c"; g.fillRect(0, 0, 256, 12); g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(0, 0, 3, 256); g.fillRect(126, 0, 3, 256); }
+  const fence = A.canvas(64, 64); { const g = fence.getContext("2d"); g.strokeStyle = "#aab3bb"; g.lineWidth = 1.5; for (let i = -64; i < 128; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 64, 64); g.moveTo(i + 64, 0); g.lineTo(i, 64); g.stroke(); } }
+  const roadNormal = normalMap(256, grit, 1.2, [22, 24]);
 
   /* ---------- Track ---------- */
   const HALF = 7.5, KERB = 1.3, WALL = 15.5;
@@ -66,12 +149,12 @@
   const wrap = i => ((i % N) + N) % N;
 
   // A ribbon that follows the track between two sideways offsets (positive = left)
-  function ribbon(offA, offB, yA, yB, material, vScale, keep) {
+  function ribbon(offA, offB, yA, yB, material, vScale, keep, alongU) {
     const pos = [], uv = [], idx = [];
     for (let i = 0; i <= N; i++) {
-      const j = i % N, p = P[j], l = LEFT[j];
+      const j = i % N, p = P[j], l = LEFT[j], v = i * DS / vScale;
       pos.push(p.x + l.x * offA, yA, p.z + l.z * offA, p.x + l.x * offB, yB, p.z + l.z * offB);
-      uv.push(0, i * DS / vScale, 1, i * DS / vScale);
+      if (alongU) uv.push(v, 0, v, 1); else uv.push(0, v, 1, v);
       if (i < N && (!keep || keep(j))) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
     }
     const geo = new T.BufferGeometry();
@@ -80,24 +163,69 @@
     geo.setIndex(idx); geo.computeVertexNormals();
     const m = new T.Mesh(geo, material); m.receiveShadow = true; scene.add(m); return m;
   }
-  const mat = (t, rough, extra) => new T.MeshStandardMaterial(Object.assign({ map: t, roughness: rough, metalness: 0, side: T.DoubleSide, envMapIntensity: 0.35 }, extra));
-  const asphaltT = bake(asphalt); asphaltT.wrapT = T.RepeatWrapping;
-  ribbon(HALF, -HALF, 0.03, 0.03, mat(asphaltT, 0.82), 12);
-  const kerbT = bake(kerb); kerbT.wrapT = T.RepeatWrapping;
+  const mat = (t, rough, extra) => new T.MeshStandardMaterial(Object.assign({ map: t, roughness: rough, metalness: 0, side: T.DoubleSide, envMapIntensity: 0.4 }, extra));
+  const rep = t => { t.wrapS = t.wrapT = T.RepeatWrapping; return t; };
+  ribbon(HALF, -HALF, 0.03, 0.03, mat(rep(bake(asphalt)), 0.72, { normalMap: roadNormal, normalScale: new T.Vector2(0.28, 0.28), envMapIntensity: 0.45 }), 16);
+  const kerbM = mat(rep(bake(kerb)), 0.55);
   const corner = j => Math.abs(CURV[j]) > 0.0045;
-  ribbon(HALF + KERB, HALF, 0.07, 0.035, mat(kerbT, 0.7), 4, corner);
-  ribbon(-HALF, -HALF - KERB, 0.035, 0.07, mat(kerbT, 0.7), 4, corner);
-  const vergeT = bake(verge); vergeT.wrapS = vergeT.wrapT = T.RepeatWrapping; vergeT.repeat.set(1.5, 1);
-  ribbon(WALL, HALF, 0.02, 0.02, mat(vergeT, 1), 8);
-  ribbon(-HALF, -WALL, 0.02, 0.02, mat(vergeT, 1), 8);
-  const wallT = bake(wall); wallT.wrapS = wallT.wrapT = T.RepeatWrapping;
-  for (const s of [1, -1]) { const w = ribbon(s * WALL, s * WALL, 0, 1.15, mat(wallT, 0.6), 1.15); w.material.map = wallT; w.castShadow = true; }
-  { // wall uv: run the pattern along the wall
-    scene.traverse(o => { if (o.isMesh && o.material.map === wallT) { const uv = o.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i) * 0.5, uv.getX(i)); } });
+  ribbon(HALF + KERB, HALF, 0.09, 0.035, kerbM, 4, corner);
+  ribbon(-HALF, -HALF - KERB, 0.035, 0.09, kerbM, 4, corner);
+  const vergeT = rep(bake(verge)); vergeT.repeat.set(2, 1);
+  ribbon(WALL, HALF, 0.02, 0.02, mat(vergeT, 0.95), 10);
+  ribbon(-HALF, -WALL, 0.02, 0.02, mat(vergeT, 0.95), 10);
+  const wallM = mat(rep(bake(wall)), 0.6), fenceT = rep(new T.CanvasTexture(fence)); fenceT.anisotropy = MAXA;
+  const fenceM = new T.MeshStandardMaterial({ map: fenceT, alphaTest: 0.35, side: T.DoubleSide, roughness: 0.5, metalness: 0.6 });
+  for (const sd of [1, -1]) {
+    ribbon(sd * WALL, sd * WALL, 0, 1.15, wallM, 2.3, null, true).castShadow = true;
+    ribbon(sd * (WALL + 0.25), sd * (WALL - 0.25), 1.15, 1.15, wallM, 2.3, null, true);                 // wall cap
+    const f = ribbon(sd * (WALL + 0.3), sd * (WALL + 0.3), 1.15, 4.4, fenceM, 1.3, null, true);
+    f.geometry.attributes.uv.array.forEach((v, i, a) => { if (i % 2) a[i] = v * 2.5; });
+  }
+  { // fence posts
+    const count = Math.floor(N / 7) * 2, posts = new T.InstancedMesh(new T.CylinderGeometry(0.07, 0.07, 3.4, 6), new T.MeshStandardMaterial({ color: lin(0x8b949c), roughness: 0.5, metalness: 0.7 }), count), m4 = new T.Matrix4();
+    let n = 0; for (let i = 0; i + 7 <= N && n < count; i += 7) for (const sd of [1, -1]) posts.setMatrixAt(n++, m4.makeTranslation(P[i].x + LEFT[i].x * sd * (WALL + 0.3), 2.8, P[i].z + LEFT[i].z * sd * (WALL + 0.3)));
+    posts.castShadow = true; scene.add(posts);
   }
 
-  const ground = new T.Mesh(new T.PlaneGeometry(5000, 5000), mat(bake(grass), 1));
-  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  /* ---------- Terrain: flat around the circuit, rolling hills beyond, mountains on the horizon ---------- */
+  const sstep = T.MathUtils.smoothstep;
+  const hash = (x, z) => { const h = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return h - Math.floor(h); };
+  function vnoise(x, z) {
+    const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi, u = xf * xf * (3 - 2 * xf), v = zf * zf * (3 - 2 * zf);
+    return lerp(lerp(hash(xi, zi), hash(xi + 1, zi), u), lerp(hash(xi, zi + 1), hash(xi + 1, zi + 1), u), v);
+  }
+  const fbm = (x, z) => vnoise(x, z) * 0.5 + vnoise(x * 2.03, z * 2.03) * 0.25 + vnoise(x * 4.1, z * 4.1) * 0.125 + vnoise(x * 8.2, z * 8.2) * 0.0625;
+  function trackDist(x, z) { let b = 1e9; for (let i = 0; i < N; i += 6) { const dx = P[i].x - x, dz = P[i].z - z, d = dx * dx + dz * dz; if (d < b) b = d; } return Math.sqrt(b); }
+  function height(x, z, d = trackDist(x, z)) {
+    const near = sstep(d, 48, 210), far = sstep(Math.hypot(x - 20, z + 115), 620, 2300);
+    const ridge = 1 - Math.abs(fbm(x * 0.0011 + 9, z * 0.0011 + 4) * 2 - 0.94);
+    return near * ((fbm(x * 0.0045, z * 0.0045) - 0.42) * 46 + fbm(x * 0.021, z * 0.021) * 5) + far * far * (60 + 760 * ridge * ridge);
+  }
+  { const SIZE = 7200, SEG = 300, geo = new T.PlaneGeometry(SIZE, SIZE, SEG, SEG); geo.rotateX(-Math.PI / 2);
+    const pos = geo.attributes.position, col = [], c = new T.Color(), meadow = lin(0x6f9a46), dry = lin(0x9aa45a), wood = lin(0x4d7a3a), rock = lin(0x8d8c86), snow = lin(0xf2f5f8);
+    for (let i = 0; i < pos.count; i++) pos.setX(i, pos.getX(i) + 20), pos.setZ(i, pos.getZ(i) - 115);
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, height(x, z)); }
+    geo.computeVertexNormals();
+    const nrm = geo.attributes.normal;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), t = fbm(x * 0.006 + 3, z * 0.006 + 7);
+      c.copy(meadow).lerp(dry, sstep(t, 0.45, 0.7)).lerp(wood, sstep(t, 0.5, 0.3) * 0.7);
+      c.lerp(rock, Math.max(sstep(y, 150, 330), sstep(1 - nrm.getY(i), 0.25, 0.5))).lerp(snow, sstep(y + t * 120, 520, 640));
+      col.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute("color", new T.Float32BufferAttribute(col, 3));
+    const ground = new T.Mesh(geo, new T.MeshStandardMaterial({ map: bake(grass), vertexColors: true, roughness: 1, envMapIntensity: 0.3 }));
+    ground.receiveShadow = true; scene.add(ground);
+  }
+  { // a thin, slowly drifting cloud deck
+    const n = 512, c = A.canvas(n, n), g = c.getContext("2d"), img = g.createImageData(n, n);
+    const tile = (x, z) => { const u = x / n, v = z / n, f = (a, b) => fbm(a * 5 + 31, b * 5 + 17); return lerp(lerp(f(u, v), f(u - 1, v), u), lerp(f(u, v - 1), f(u - 1, v - 1), u), v); };
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const a = sstep(tile(x, y), 0.4, 0.66), i = (y * n + x) * 4; img.data[i] = 255; img.data[i + 1] = 246; img.data[i + 2] = 232; img.data[i + 3] = a * 215; }
+    g.putImageData(img, 0, 0);
+    const t = new T.CanvasTexture(c); t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(3, 3); t.encoding = T.sRGBEncoding;
+    var clouds = new T.Mesh(new T.PlaneGeometry(26000, 26000), new T.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, fog: false, opacity: 0.9 }));
+    clouds.rotation.x = Math.PI / 2; clouds.position.y = 1500; scene.add(clouds);
+  }
 
   /* ---------- Scenery ---------- */
   const flat = (color, rough = 0.8, metal = 0) => new T.MeshStandardMaterial({ color: lin(color), roughness: rough, metalness: metal, envMapIntensity: 0.4 });
@@ -148,32 +276,64 @@
     b.castShadow = false;
     for (const e of [-6, 6]) put(new T.BoxGeometry(0.25, 2.6, 0.25), steel, b.position.x + TAN[i].x * e, 1.3, b.position.z + TAN[i].z * e);
   }
-  // Trees (instanced) kept clear of the circuit
-  { const spots = [];
-    for (let tries = 0; spots.length < 420 && tries < 6000; tries++) {
-      const x = rnd(-420, 460), z = rnd(-470, 240);
-      if (x > -60 && x < 100 && z > -40 && z < 46) continue;
-      let ok = true;
-      for (let i = 0; i < N; i += 10) { const dx = P[i].x - x, dz = P[i].z - z; if (dx * dx + dz * dz < 26 * 26) { ok = false; break; } }
-      if (ok) spots.push([x, z, rnd(0.7, 1.5)]);
+  // Forest: two instanced tree shapes with per-tree size and tint, planted on the terrain
+  function merged(pieces) {
+    const pos = [], nor = [], col = [], c = new T.Color();
+    for (const [geo, lo, hi] of pieces) {
+      const g = geo.toNonIndexed(); g.computeVertexNormals(); g.computeBoundingBox();
+      const p = g.attributes.position, n = g.attributes.normal, y0 = g.boundingBox.min.y, y1 = g.boundingBox.max.y;
+      for (let i = 0; i < p.count; i++) {
+        pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i));
+        c.copy(lin(lo)).lerp(lin(hi), (p.getY(i) - y0) / (y1 - y0 || 1)); col.push(c.r, c.g, c.b);
+      }
     }
-    const trunk = new T.InstancedMesh(new T.CylinderGeometry(0.35, 0.5, 3, 6), flat(0x5c3b23, 1), spots.length);
-    const crownA = new T.InstancedMesh(new T.ConeGeometry(3, 7, 8), flat(0x2f6b33, 1), spots.length);
-    const crownB = new T.InstancedMesh(new T.ConeGeometry(2.2, 5.5, 8), flat(0x3a7d3c, 1), spots.length);
-    const m4 = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3();
-    spots.forEach(([x, z, s], i) => {
-      q.setFromAxisAngle(new T.Vector3(0, 1, 0), Math.random() * 6);
-      trunk.setMatrixAt(i, m4.compose(new T.Vector3(x, 1.5 * s, z), q, sc.set(s, s, s)));
-      crownA.setMatrixAt(i, m4.compose(new T.Vector3(x, 5.5 * s, z), q, sc.set(s, s, s)));
-      crownB.setMatrixAt(i, m4.compose(new T.Vector3(x, 8.6 * s, z), q, sc.set(s, s, s)));
-    });
-    for (const im of [trunk, crownA, crownB]) { im.castShadow = true; scene.add(im); }
+    const out = new T.BufferGeometry();
+    out.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); out.setAttribute("normal", new T.Float32BufferAttribute(nor, 3)); out.setAttribute("color", new T.Float32BufferAttribute(col, 3));
+    return out;
   }
-  // Distant hills
-  for (let i = 0; i < 14; i++) {
-    const a = i / 14 * Math.PI * 2 + rnd(-0.1, 0.1), r = rnd(900, 1250), h = rnd(90, 210);
-    const hill = new T.Mesh(new T.ConeGeometry(rnd(260, 420), h, 7), flat(i % 2 ? 0x5f7f6a : 0x6b8a78, 1));
-    hill.position.set(Math.cos(a) * r, h / 2 - 8, Math.sin(a) * r - 100); scene.add(hill);
+  const at = (geo, x, y, z, sx = 1, sy = 1, sz = 1) => { geo.scale(sx, sy, sz); geo.translate(x, y, z); return geo; };
+  const pine = merged([
+    [at(new T.CylinderGeometry(0.28, 0.45, 3.2, 7), 0, 1.6, 0), 0x3d2a1a, 0x5a3d26],
+    [at(new T.ConeGeometry(3.3, 4.6, 9), 0, 4.6, 0), 0x16361f, 0x2f6a35], [at(new T.ConeGeometry(2.7, 4.2, 9), 0, 6.9, 0), 0x1a3f24, 0x377a3c],
+    [at(new T.ConeGeometry(2.0, 3.8, 9), 0, 9.1, 0), 0x1e4728, 0x40873f], [at(new T.ConeGeometry(1.2, 3.2, 8), 0, 11.2, 0), 0x245230, 0x55a04a]
+  ]);
+  const oak = merged([
+    [at(new T.CylinderGeometry(0.35, 0.6, 4.2, 7), 0, 2.1, 0), 0x3a2a1c, 0x5c4630],
+    [at(new T.IcosahedronGeometry(3.2, 1), 0, 6.4, 0, 1, 0.85, 1), 0x2a5a26, 0x6fae4a], [at(new T.IcosahedronGeometry(2.3, 1), 1.9, 5.6, 0.8, 1, 0.8, 1), 0x275424, 0x62a044],
+    [at(new T.IcosahedronGeometry(2.4, 1), -1.7, 5.9, -1.1, 1, 0.8, 1), 0x2c5e28, 0x74b44e], [at(new T.IcosahedronGeometry(1.9, 1), 0.3, 8.2, -0.6, 1, 0.85, 1), 0x356b2c, 0x86c257]
+  ]);
+  { const spots = [[], []];
+    for (let tries = 0; spots[0].length + spots[1].length < 1500 && tries < 16000; tries++) {
+      const x = rnd(-950, 1000), z = rnd(-1050, 820);
+      if (x > -70 && x < 110 && z > -44 && z < 50) continue;
+      const d = trackDist(x, z); if (d < 25) continue;
+      const grove = fbm(x * 0.008 + 5, z * 0.008 + 2); if (d > 70 && grove < 0.44) continue;           // clearings between the woods
+      const y = height(x, z, d); if (y > 190) continue;
+      spots[grove > 0.56 || Math.random() < 0.25 ? 0 : 1].push([x, y, z, rnd(0.75, 1.7)]);
+    }
+    const treeMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, envMapIntensity: 0.25 }), m4 = new T.Matrix4(), q = new T.Quaternion(), sc = new T.Vector3(), up = new T.Vector3(0, 1, 0), tint = new T.Color();
+    [pine, oak].forEach((geo, k) => {
+      const im = new T.InstancedMesh(geo, treeMat, spots[k].length);
+      spots[k].forEach(([x, y, z, sz], i) => {
+        q.setFromAxisAngle(up, Math.random() * 6.3);
+        im.setMatrixAt(i, m4.compose(new T.Vector3(x, y - 0.3, z), q, sc.set(sz * rnd(0.85, 1.15), sz, sz * rnd(0.85, 1.15))));
+        const v = rnd(0.72, 1.12); im.setColorAt(i, tint.setRGB(v * rnd(0.92, 1.08), v, v * rnd(0.8, 1)));
+      });
+      im.castShadow = true; im.receiveShadow = true; scene.add(im);
+    });
+  }
+  // Floodlight masts and flags around the start
+  { const mast = new T.MeshStandardMaterial({ color: lin(0x6f7780), roughness: 0.45, metalness: 0.7 }), lampM = new T.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2d0, emissiveIntensity: 1.6 });
+    for (const [x, z] of [[-70, 44], [20, 46], [110, 44], [-40, -40], [100, -40]]) {
+      put(new T.CylinderGeometry(0.25, 0.4, 26, 8), mast, x, 13, z);
+      put(new T.BoxGeometry(5, 1.6, 0.6), lampM, x, 26.5, z, z > 0 ? 0 : Math.PI).castShadow = false;
+    }
+    const flagC = [0xf4c430, 0x0a566b, 0xa8322d, 0xffffff];
+    for (let i = 0; i < 12; i++) {
+      const x = -52 + i * 13;
+      put(new T.CylinderGeometry(0.06, 0.06, 7, 6), mast, x, 17.3, 39.5);
+      const f = put(new T.PlaneGeometry(2.4, 1.4), new T.MeshStandardMaterial({ color: lin(flagC[i % 4]), side: T.DoubleSide, roughness: 0.8 }), x + 1.2, 20, 39.5); f.castShadow = false;
+    }
   }
 
   /* ---------- Cars ---------- */
@@ -186,11 +346,15 @@
     { name: "White Heron", base: "#e9edf0", accent: "#d8322a", panel: "#aeb9c2", number: "63", skill: 0.89 }
   ];
   const cars = [];
+  const blobTex = A.canvas(128, 64); { const g = blobTex.getContext("2d"), gr = g.createRadialGradient(64, 32, 4, 64, 32, 62); gr.addColorStop(0, "rgba(0,0,0,0.62)"); gr.addColorStop(0.55, "rgba(0,0,0,0.36)"); gr.addColorStop(1, "rgba(0,0,0,0)"); g.setTransform(1, 0, 0, 0.5, 0, 16); g.fillStyle = gr; g.fillRect(0, -32, 128, 128); }
+  const blobMat = new T.MeshBasicMaterial({ map: new T.CanvasTexture(blobTex), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   let player;
   function makeCar(opts, isPlayer) {
-    const model = A.buildCar(Object.assign({ detail: "low" }, opts));
+    const model = A.buildCar(Object.assign({ detail: isPlayer ? "high" : "low" }, opts));
     model.group.scale.setScalar(SCALE);
+    model.group.traverse(o => { if (o.isMesh && o.material.envMapIntensity !== undefined) o.material.envMapIntensity = 0.75; });
     const holder = new T.Group(); holder.add(model.group); scene.add(holder);
+    const blob = new T.Mesh(new T.PlaneGeometry(6.4, 3.4), blobMat); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.05; blob.renderOrder = 1; holder.add(blob);
     const car = { model, holder, isPlayer, name: opts.name || "You", color: opts.base || "#0a566b", pos: new T.Vector3(), a: 0, speed: 0, idx: 0, lap: -1, lat: 0, steer: 0, done: 0, skill: opts.skill || 1 };
     cars.push(car); return car;
   }
@@ -242,10 +406,24 @@
   });
   addEventListener("keyup", e => { keys[e.code] = false; });
   addEventListener("blur", () => { for (const k in keys) keys[k] = false; if (state === "race" || state === "countdown") togglePause(); });
+  // Touch: an analog steering pad plus pedal buttons. Shown on touch screens.
+  let padSteer = null;
+  const pad = $("g-pad"), knob = pad.querySelector("i");
+  function padMove(e) {
+    const r = pad.getBoundingClientRect(), x = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2 - 26), -1, 1);
+    padSteer = -Math.sign(x) * Math.abs(x) ** 0.8; knob.style.transform = `translateX(${x * (r.width / 2 - 34)}px)`;
+  }
+  pad.addEventListener("pointerdown", e => { e.preventDefault(); try { pad.setPointerCapture(e.pointerId); } catch (err) {} pad.classList.add("held"); padMove(e); });
+  pad.addEventListener("pointermove", e => { if (padSteer !== null) padMove(e); });
+  for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) pad.addEventListener(t, () => { padSteer = null; knob.style.transform = ""; pad.classList.remove("held"); });
+  const isTouch = () => stage.classList.add("is-touch");
+  if (matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 0 && !matchMedia("(hover: hover)").matches) isTouch();
+  addEventListener("touchstart", isTouch, { once: true, passive: true });
+
   document.querySelectorAll("[data-key]").forEach(b => {
-    const set = v => e => { e.preventDefault(); touch[b.dataset.key] = v; b.classList.toggle("held", v); };
+    const set = v => e => { e.preventDefault(); if (v) try { b.setPointerCapture(e.pointerId); } catch (err) {} touch[b.dataset.key] = v; b.classList.toggle("held", v); };
     b.addEventListener("pointerdown", set(true)); b.addEventListener("pointerup", set(false));
-    b.addEventListener("pointerleave", set(false)); b.addEventListener("pointercancel", set(false));
+    b.addEventListener("lostpointercapture", set(false)); b.addEventListener("pointercancel", set(false));
     b.addEventListener("contextmenu", e => e.preventDefault());
   });
 
@@ -254,7 +432,7 @@
   function drivePlayer(dt) {
     const c = player, live = state === "race" && !c.done;
     const thr = live && down("ArrowUp", "KeyW") ? 1 : 0, brk = live && down("ArrowDown", "KeyS", "Space") ? 1 : 0;
-    const want = live ? (down("ArrowLeft", "KeyA") ? 1 : 0) - (down("ArrowRight", "KeyD") ? 1 : 0) : 0;
+    const want = !live ? 0 : padSteer !== null ? padSteer : (down("ArrowLeft", "KeyA") ? 1 : 0) - (down("ArrowRight", "KeyD") ? 1 : 0);
     c.steer += clamp(want - c.steer, -dt * 4.5, dt * 4.5);
     boosting = live && down("ShiftLeft", "ShiftRight", "KeyB") && boost > 0.02 && thr > 0;
     boost = clamp(boost + (boosting ? -dt / 3.5 : dt / 14), 0, 1);
@@ -340,12 +518,26 @@
   puffs.frustumCulled = false; scene.add(puffs);
   const puffState = Array.from({ length: PUFFS }, () => ({ life: 0, p: new T.Vector3(), v: new T.Vector3() }));
   let puffNext = 0;
+  const DUST = 90, dustGeo = new T.BufferGeometry();
+  dustGeo.setAttribute("position", new T.BufferAttribute(new Float32Array(DUST * 3).fill(-50), 3));
+  const dust = new T.Points(dustGeo, new T.PointsMaterial({ size: 2.6, map: new T.CanvasTexture(puffDot), color: lin(0x9a8a62), transparent: true, opacity: 0.34, depthWrite: false }));
+  dust.frustumCulled = false; scene.add(dust);
+  const dustState = Array.from({ length: DUST }, () => ({ life: 0, p: new T.Vector3(0, -50, 0), v: new T.Vector3() }));
+  let dustNext = 0;
   function updatePuffs(dt) {
     if (boosting) for (let n = 0; n < 3; n++) {
       const q = puffState[puffNext = (puffNext + 1) % PUFFS], fx = Math.cos(player.a), fz = Math.sin(player.a);
       q.life = 1; q.p.set(player.pos.x - fx * 2.4, 0.5, player.pos.z - fz * 2.4);
       q.v.set(-fx * 9 + rnd(-2, 2) + player.vx * 0.6, rnd(0.3, 2), -fz * 9 + rnd(-2, 2) + player.vz * 0.6);
     }
+    if (state === "race" && Math.abs(player.lat) > HALF + KERB && Math.abs(player.speed) > 9) for (let n = 0; n < 2; n++) {
+      const d = dustState[dustNext = (dustNext + 1) % DUST];
+      d.life = 1; d.p.set(player.pos.x - Math.cos(player.a) * 1.6 + rnd(-0.9, 0.9), 0.3, player.pos.z - Math.sin(player.a) * 1.6 + rnd(-0.9, 0.9));
+      d.v.set(rnd(-1.5, 1.5), rnd(1, 2.6), rnd(-1.5, 1.5));
+    }
+    const dp = dustGeo.attributes.position;
+    dustState.forEach((d, i) => { d.life = Math.max(0, d.life - dt * 0.9); d.p.addScaledVector(d.v, dt); dp.setXYZ(i, d.p.x, d.life > 0 ? d.p.y : -50, d.p.z); });
+    dp.needsUpdate = true;
     const pos = puffGeo.attributes.position, col = puffGeo.attributes.color;
     puffState.forEach((q, i) => {
       q.life = Math.max(0, q.life - dt * 2.2); q.p.addScaledVector(q.v, dt);
@@ -364,7 +556,7 @@
   function startRace() {
     grid(); state = "countdown"; clock = 0; raceTime = 0; lapStart = 0; lastLap = null;
     show("g-menu", false); show("g-result", false); show("g-hud", true); show("g-lights", true); show("g-touch", true);
-    $("g-msg").textContent = ""; stage.focus();
+    $("g-msg").textContent = ""; stage.focus(); stage.classList.add("playing");
   }
   function togglePause() {
     if (state === "race" || state === "countdown") { resumeTo = state; state = "paused"; show("g-pause", true); }
@@ -377,7 +569,7 @@
     $("g-result-rows").innerHTML = order.map((c, i) =>
       `<li class="${c.isPlayer ? "me" : ""}"><b>${i + 1}</b><i style="background:${c.color}"></i><span>${c.name}</span><em>${c.done ? fmt(c.done) : "+" + Math.max(1, Math.round((progress(order[0]) - progress(c)) * DS)) + " m"}</em></li>`).join("");
     $("g-result-best").textContent = best ? "Best lap " + fmt(best) : "";
-    show("g-result", true); show("g-touch", false);
+    show("g-result", true); show("g-touch", false); stage.classList.remove("playing");
   }
   function standings() {
     return [...cars].sort((a, b) => (a.done && b.done) ? a.done - b.done : a.done ? -1 : b.done ? 1 : progress(b) - progress(a));
@@ -463,9 +655,15 @@
       for (const c of cars) pose(c, dt);
       chase(dt);
       sun.target.position.copy(player.pos); sun.position.copy(player.pos).add(SUN_DIR);
-      sky.position.set(camera.position.x, 0, camera.position.z);
+      sky.position.copy(camera.position);
+      clouds.position.set(camera.position.x, 1500, camera.position.z); clouds.material.map.offset.x += dt * 0.0012;
     }
-    renderer.render(scene, camera);
+    if (composer && quality === "high") {
+      const v = state === "menu" ? 0 : Math.abs(player.speed);
+      finalPass.uniforms.uBlur.value += (clamp((v - 38) / 60, 0, 1) * 0.085 + (boosting ? 0.05 : 0) - finalPass.uniforms.uBlur.value) * Math.min(1, dt * 5);
+      finalPass.uniforms.uTime.value = (now / 1000) % 60;
+      composer.render(dt);
+    } else renderer.render(scene, camera);
     schedule();
   }
   function schedule() {
@@ -477,6 +675,7 @@
     const w = stage.clientWidth, h = stage.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (composer) composer.setSize(w, h);
   }
   new ResizeObserver(resize).observe(stage);
   new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; if (!onScreen && (state === "race" || state === "countdown")) togglePause(); schedule(); }).observe(stage);
@@ -487,6 +686,15 @@
   $("g-resume").addEventListener("click", togglePause);
   $("g-restart").addEventListener("click", () => { show("g-pause", false); startRace(); });
   $("g-cam").addEventListener("click", () => { camMode = (camMode + 1) % 3; });
+  $("g-pause-btn").addEventListener("click", togglePause);
+  $("g-quality").addEventListener("click", () => {
+    quality = quality === "high" ? "low" : "high";
+    $("g-quality").textContent = "Graphics: " + (quality === "high" ? "High" : "Low");
+    renderer.setPixelRatio(quality === "high" ? Math.min(devicePixelRatio, 1.75) : 1);
+    sun.shadow.mapSize.setScalar(quality === "high" ? SHADOW : 1024); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    resize();
+  });
+  if (!composer) $("g-quality").hidden = true;
   $("g-full").addEventListener("click", () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});

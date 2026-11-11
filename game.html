@@ -8,7 +8,7 @@
 <link rel="icon" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 <header id="site-header"></header>
@@ -44,12 +44,18 @@
         <div class="lights g-lights" id="g-lights" hidden aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
 
         <div class="g-touch" id="g-touch" hidden>
-          <div><button type="button" data-key="ArrowLeft" aria-label="Steer left">◀</button><button type="button" data-key="ArrowRight" aria-label="Steer right">▶</button></div>
-          <div><button type="button" data-key="KeyB" class="b">CO₂</button><button type="button" data-key="ArrowDown" class="r">Brake</button><button type="button" data-key="ArrowUp" class="g">Gas</button></div>
+          <div class="g-pad" id="g-pad" role="slider" aria-label="Steering: slide left or right"><span>◀</span><i></i><span>▶</span></div>
+          <div class="g-pedals">
+            <button type="button" data-key="KeyB" class="b">CO₂</button>
+            <button type="button" data-key="ArrowDown" class="r">Brake</button>
+            <button type="button" data-key="ArrowUp" class="g">Gas</button>
+          </div>
         </div>
 
         <div class="g-bar">
+          <button type="button" id="g-pause-btn">Pause</button>
           <button type="button" id="g-cam">Camera</button>
+          <button type="button" id="g-quality">Graphics: High</button>
           <button type="button" id="g-full">Fullscreen</button>
         </div>
 
@@ -59,7 +65,8 @@
             <h2>Stoop Grand Prix</h2>
             <p id="g-menu-msg">Loading the circuit…</p>
             <button class="btn" id="g-start" type="button" disabled><span>Start race</span></button>
-            <p class="g-keys"><kbd>↑</kbd> gas <kbd>↓</kbd> brake <kbd>←</kbd><kbd>→</kbd> steer <kbd>Shift</kbd> CO₂ boost</p>
+            <p class="g-keys g-keys--kb"><kbd>↑</kbd> gas <kbd>↓</kbd> brake <kbd>←</kbd><kbd>→</kbd> steer <kbd>Shift</kbd> CO₂ boost</p>
+            <p class="g-keys g-keys--touch">Slide the left pad to steer. Gas, brake and CO₂ are on the right. Turn your phone sideways for a wider view.</p>
           </div>
         </div>
         <div class="g-overlay" id="g-pause" hidden>
@@ -90,7 +97,7 @@
             <li><kbd>R</kbd><span>Put me back on track</span></li>
             <li><kbd>P</kbd><span>Pause</span></li>
           </ul>
-          <p class="muted small">On a phone or tablet, use the buttons on the screen.</p>
+          <p class="muted small">On a phone or tablet, touch controls appear on the screen: a steering pad on the left, pedals on the right.</p>
         </div>
         <div class="stack">
           <h3>How to win</h3>
@@ -108,10 +115,17 @@
 </main>
 
 <footer id="site-footer"></footer>
-<script src="js/site.js?v=3"></script>
+<script src="js/site.js?v=5"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/falcon-decal.js?v=3"></script>
-<script src="js/car-model.js?v=3"></script>
-<script src="js/game.js?v=3"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/objects/Sky.js"></script>
+<script src="js/falcon-decal.js?v=5"></script>
+<script src="js/car-model.js?v=5"></script>
+<script src="js/game.js?v=5"></script>
 </body>
 </html>
