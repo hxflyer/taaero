@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Car | TA-aero</title>
-<meta name="description" content="How a STEM Racing car works, a 3D concept model, an airflow visualization, and a time attack simulator you can tune and race.">
+<meta name="description" content="How a STEM Racing car works, a 3D model, an airflow visualization, and a time attack simulator you can tune and race.">
 <link rel="icon" href="images/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@1,800&family=Instrument+Sans:ital,wght@0,400;0,600;0,700;1,600&family=JetBrains+Mono:wght@500&display=swap">
@@ -26,12 +26,12 @@
     <div class="wrap stack-lg">
       <div class="split">
         <div class="stack">
-          <p class="eyebrow">Concept</p>
-          <h2>Streamlined concept</h2>
+          <p class="eyebrow">Our design</p>
+          <h2>Our STEM Racing car</h2>
         </div>
-        <p>A tapered nose and rounded cartridge housing guide air over the body. Narrow wings and an undercut between the wheels leave room for air to pass around it.</p>
+        <p>Our CAD design pairs a pointed nose and split front wing with low sidepods and a rear wing mounted directly to the cartridge housing. The body is shown in Stoop’s blue-green teal.</p>
       </div>
-      <img class="concept-render" src="images/car-concept.jpg" width="1536" height="1024" alt="Teal STEM Racing car with the diving falcon painted on its side, yellow wings and four exposed wheels">
+      <img class="concept-render" src="images/car-cad-teal.jpg" width="1586" height="992" alt="Three-quarter CAD view of the TA-aero car in blue-green teal">
     </div>
   </section>
 
@@ -60,7 +60,7 @@
           <aside class="lab-side" id="lab-controls" hidden>
             <div class="stack" data-panel="studio">
               <h3>Studio</h3>
-              <p class="muted">Painted, assembled and lit like a product shot. The falcon on each flank is our real team logo.</p>
+              <p class="muted">Rotate the model to see the split front wing, sidepods and low rear wing from the supplied CAD views.</p>
               <div class="chips" role="group" aria-label="Camera views">
                 <button class="chip" data-view="perspective" type="button">Three-quarter</button>
                 <button class="chip" data-view="side" type="button">Side</button>
@@ -118,38 +118,16 @@
 
       <div class="diagram">
         <svg viewBox="0 0 900 330" role="img" aria-label="Side view of a STEM Racing car with labelled parts">
-          <line x1="20" y1="252" x2="880" y2="252" stroke="#6f8aa0" stroke-width="2"/>
-          <line x1="20" y1="262" x2="880" y2="262" stroke="#6f8aa0" stroke-width="1" stroke-dasharray="6 6"/>
-          <!-- body -->
-          <path d="M150 232 C230 226 300 205 380 176 C450 152 520 138 600 136 L742 136 L742 214 C700 232 640 236 560 236 L190 238 Z" fill="#265b6f" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
-          <path d="M470 205 L560 190 L540 228 L532 228 L542 204 L474 214 Z" fill="#f4c430"/>
-          <!-- cartridge chamber -->
-          <rect x="640" y="150" width="102" height="44" rx="6" fill="#0f1e29"/>
-          <rect x="652" y="158" width="106" height="28" rx="12" fill="#b9c4cd" stroke="#0f1e29" stroke-width="2"/>
-          <!-- wings -->
-          <path d="M118 234 L196 226 L198 240 L118 244 Z" fill="#f4c430" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
-          <path d="M726 96 L812 90 L814 104 L728 108 Z" fill="#f4c430" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
-          <path d="M760 104 L790 104 L784 140 L742 140 Z" fill="#265b6f" stroke="#0f1e29" stroke-width="3" stroke-linejoin="round"/>
-          <!-- wheels -->
-          <g fill="#17242e" stroke="#0f1e29" stroke-width="3">
-            <circle cx="262" cy="222" r="30"/><circle cx="668" cy="220" r="32"/>
+          <image href="images/car-side.svg" x="110" y="75" width="680" height="196"/>
+          <g fill="none" stroke="#17242e" stroke-width="1.2">
+            <path d="M186 232 V285 M311 246 V303 M405 112 V46 M604 91 V46 M727 121 V74 M620 246 V303"/>
           </g>
-          <circle cx="262" cy="222" r="9" fill="#b9c4cd"/><circle cx="668" cy="220" r="10" fill="#b9c4cd"/>
-          <!-- tether guides -->
-          <circle cx="330" cy="248" r="5" fill="none" stroke="#a8322d" stroke-width="3"/>
-          <circle cx="600" cy="248" r="5" fill="none" stroke="#a8322d" stroke-width="3"/>
-          <!-- labels -->
-          <g stroke="#17242e" stroke-width="1.2" fill="none">
-            <path d="M150 226 V60"/><path d="M262 190 V34"/><path d="M430 158 V60"/><path d="M700 150 V34"/><path d="M790 88 V60"/>
-            <path d="M330 254 V300"/><path d="M668 254 V300"/>
-          </g>
-          <text x="150" y="52" text-anchor="middle">Front wing</text>
-          <text x="262" y="26" text-anchor="middle">Front wheels</text>
-          <text x="430" y="52" text-anchor="middle">Body, from one model block</text>
-          <text x="700" y="26" text-anchor="middle">CO₂ cartridge chamber</text>
-          <text x="800" y="52" text-anchor="middle">Rear wing</text>
-          <text x="330" y="318" text-anchor="middle">Tether line guides</text>
-          <text x="668" y="318" text-anchor="middle">Rear wheels</text>
+          <text x="186" y="302" text-anchor="middle">Front wing</text>
+          <text x="311" y="320" text-anchor="middle">Front wheels</text>
+          <text x="405" y="37" text-anchor="middle">Body</text>
+          <text x="604" y="37" text-anchor="middle">CO₂ cartridge chamber</text>
+          <text x="727" y="66" text-anchor="middle">Rear wing</text>
+          <text x="620" y="320" text-anchor="middle">Rear wheels</text>
         </svg>
       </div>
 
@@ -220,10 +198,8 @@
           <div>
             <div class="strip" id="strip">
               <div class="ticks"></div><div class="finish"></div>
-              <svg class="car" id="sim-car" viewBox="0 0 76 30" aria-hidden="true"><g transform="translate(76 0) scale(-1 1)">
-                <path d="M2 24 C20 22 34 12 52 9 L70 9 L70 22 C60 25 40 25 8 25 Z" fill="#265b6f" stroke="#0f1e29" stroke-width="1.5"/>
-                <path d="M62 3 L76 2 L76 6 L63 6 Z" fill="#f4c430"/><path d="M0 23 L12 21 L12 25 L0 26 Z" fill="#f4c430"/>
-                <circle cx="18" cy="23" r="6" fill="#17242e"/><circle cx="60" cy="23" r="6.5" fill="#17242e"/></g>
+              <svg class="car" id="sim-car" viewBox="0 0 76 30" aria-hidden="true">
+                <image href="images/car-side.svg" width="76" height="30" transform="translate(76 0) scale(-1 1)"/>
               </svg>
             </div>
             <div class="strip-scale"><span>0 m</span><span>5</span><span>10</span><span>15</span><span>20 m</span></div>
@@ -251,8 +227,7 @@
 <script src="js/site.js?v=5"></script>
 <script src="js/sim.js?v=5"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/falcon-decal.js?v=5"></script>
-<script src="js/car-model.js?v=5"></script>
-<script src="js/car3d.js?v=5"></script>
+<script src="js/car-model.js?v=6"></script>
+<script src="js/car3d.js?v=6"></script>
 </body>
 </html>

@@ -116,9 +116,9 @@
   function streamPath(x, inletY, inletZ) {
     let y = inletY, z = inletZ, speed = 1;
     const side = Math.sign(z) || 1;
-    const [bottom, top, width] = A.bodyAt(clamp(x, -10.1, 9.15));
+    const [bottom, top, width] = A.bodyAt(clamp(x, A.X0, A.X1));
     const bodyFade = smooth(x, -12.5, -9.3) * (1 - smooth(x, 8.8, 14.5));
-    const d = Math.abs(z), half = width * 1.2 + 0.45;
+    const d = Math.abs(z), half = width + 0.35;
     if (d < half) {
       const cross = Math.sqrt(Math.max(0, 1 - (d / half) ** 2));
       const roof = (bottom + top) / 2 + ((top - bottom) / 2 + 0.36) * cross;
@@ -130,7 +130,7 @@
     }
     for (const wh of A.WHEELS) {
       const dx = x - wh.x, lane = Math.abs(z) - wh.z;
-      if (Math.abs(lane) >= 1.6) continue;
+      if (Math.abs(lane) >= wh.width / 2 + 0.55) continue;
       const env = smooth(dx, -3.4, -wh.radius) * (1 - smooth(dx, wh.radius, 4.8));
       const hgt = 1 - smooth(y, wh.radius * 2, wh.radius * 2 + 0.5);
       const shift = Math.max(0, wh.width / 2 + 0.38 - Math.abs(lane));
@@ -138,10 +138,12 @@
       speed += 0.35 * env * hgt * (shift > 0 ? 1 : 0);
       speed -= 0.55 * smooth(dx, wh.radius, wh.radius + 0.6) * (1 - smooth(dx, 2.5, 6)) * hgt * (Math.abs(lane) < 0.6 ? 1 : 0);
     }
-    const wing = smooth(x, 5.9, 7.5) * (1 - smooth(x, 9, 12.4));
-    if (Math.abs(z) < 3.35 && y > 4.9 && y < 6.1) {
-      const over = y >= 5.42;
-      y += (over ? 6.12 - y : 4.88 - y) * wing;
+    const rear = A.REAR_WING;
+    const wing = smooth(x, rear.x - 3, rear.x - rear.chord / 2)
+      * (1 - smooth(x, rear.x + rear.chord / 2, rear.x + 4));
+    if (Math.abs(z) < rear.span / 2 + 0.14 && Math.abs(y - rear.y) < 0.65) {
+      const over = y >= rear.y;
+      y += (rear.y + (over ? 0.65 : -0.65) - y) * wing;
       speed += (over ? 0.3 : -0.15) * wing;
     }
     return [x, y, z, clamp(speed, 0.12, 1.6)];
@@ -176,8 +178,8 @@
     }, 0.018);
     for (const wh of A.WHEELS) for (const s of [-1, 1]) for (const ph of [0, 2.1, 4.2])
       swirl(wh.x + wh.radius + 0.05, wh.radius, s * wh.z, 0.6, ph);
-    for (const s of [-1, 1]) for (const ph of [0, Math.PI]) swirl(9.6, 5.45, s * 3.08, 0.5, ph + s);
-    for (const ph of [0, 2.1, 4.2]) swirl(9.5, 2.0, 0, 0.85, ph);
+    for (const s of [-1, 1]) for (const ph of [0, Math.PI]) swirl(A.REAR_WING.x + A.REAR_WING.chord / 2, A.REAR_WING.y, s * A.REAR_WING.span / 2, 0.5, ph + s);
+    for (const ph of [0, 2.1, 4.2]) swirl(A.X1 + 0.15, 2.86, 0, 0.85, ph);
 
     // Glowing particles that ride each streamline at its local speed
     const PER = 5, TRAIL = 7, count = streams.length * PER * TRAIL;
@@ -257,7 +259,7 @@
   let last, onScreen = true, raf = 0;
   function frame(now) {
     raf = 0;
-    const dt = last === undefined ? 0 : Math.min(0.05, (now - last) / 1000); last = now;
+    const dt = last === undefined ? 0 : clamp((now - last) / 1000, 0, 0.05); last = now;
     const k = 1 - Math.exp(-dt * 7);
     if (spin && !drag) yawT += dt * 0.25;
     yaw += (yawT - yaw) * k; pitch += (pitchT - pitch) * k; zoom += (zoomT - zoom) * k;
@@ -338,17 +340,14 @@
   reduced.addEventListener("change", e => { if (e.matches) { setSpin(false); playing = false; pause.textContent = "Play flow"; } });
 
   /* ---------- Go ---------- */
-  A.loadFalcon(falcon => {
-    car = A.buildCar({ falcon, detail: "high" });
-    car.paint = car.bodyMesh.material;
-    rig.add(car.group);
-    buildPartUI(); buildFlow(); buildPressure();
-    moveSparks(0);
-    pause.textContent = playing ? "Pause flow" : "Play flow";
-    select(null); selected = null;
-    setSpin(spin); setMode("studio");
-    document.getElementById("lab-controls").hidden = false;
-    resize(); frame(performance.now());
-  });
-  resize();
+  car = A.buildCar({ detail: "high" });
+  car.paint = car.bodyMesh.material;
+  rig.add(car.group);
+  buildPartUI(); buildFlow(); buildPressure();
+  moveSparks(0);
+  pause.textContent = playing ? "Pause flow" : "Play flow";
+  select(null); selected = null;
+  setSpin(spin); setMode("studio");
+  document.getElementById("lab-controls").hidden = false;
+  resize(); schedule();
 })();
