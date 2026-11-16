@@ -339,23 +339,23 @@
   /* ---------- Cars ---------- */
   const SCALE = 0.24, LAPS = 3;
   const RIVALS = [
-    { name: "Crimson Kite", marker: "#a8221f", number: "7", skill: 0.99 },
-    { name: "Volt Viper", marker: "#1c1f26", number: "22", skill: 0.965 },
-    { name: "Orange Osprey", marker: "#e8641b", number: "41", skill: 0.94 },
-    { name: "Royal Swift", marker: "#2845b8", number: "9", skill: 0.915 },
-    { name: "White Heron", marker: "#e9edf0", number: "63", skill: 0.89 }
+    { name: "Crimson Kite", base: "#a8221f", accent: "#ffffff", panel: "#f0d9b8", number: "7", skill: 0.99 },
+    { name: "Volt Viper", base: "#1c1f26", accent: "#b6f22b", panel: "#3b424c", number: "22", skill: 0.965 },
+    { name: "Orange Osprey", base: "#e8641b", accent: "#12222e", panel: "#ffe2c4", number: "41", skill: 0.94 },
+    { name: "Royal Swift", base: "#2845b8", accent: "#f4c430", panel: "#dfe6f5", number: "9", skill: 0.915 },
+    { name: "White Heron", base: "#e9edf0", accent: "#d8322a", panel: "#aeb9c2", number: "63", skill: 0.89 }
   ];
   const cars = [];
   const blobTex = A.canvas(128, 64); { const g = blobTex.getContext("2d"), gr = g.createRadialGradient(64, 32, 4, 64, 32, 62); gr.addColorStop(0, "rgba(0,0,0,0.62)"); gr.addColorStop(0.55, "rgba(0,0,0,0.36)"); gr.addColorStop(1, "rgba(0,0,0,0)"); g.setTransform(1, 0, 0, 0.5, 0, 16); g.fillStyle = gr; g.fillRect(0, -32, 128, 128); }
   const blobMat = new T.MeshBasicMaterial({ map: new T.CanvasTexture(blobTex), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
   let player;
   function makeCar(opts, isPlayer) {
-    const model = A.buildCar(Object.assign({ detail: isPlayer ? "high" : "low" }, opts));
+    const model = isPlayer ? A.buildCar() : window.buildRivalCar(opts);
     model.group.scale.setScalar(SCALE);
     model.group.traverse(o => { if (o.isMesh && o.material.envMapIntensity !== undefined) o.material.envMapIntensity = 0.75; });
     const holder = new T.Group(); holder.add(model.group); scene.add(holder);
     const blob = new T.Mesh(new T.PlaneGeometry(6.4, 3.4), blobMat); blob.rotation.x = -Math.PI / 2; blob.position.y = 0.05; blob.renderOrder = 1; holder.add(blob);
-    const car = { model, holder, isPlayer, name: opts.name || "You", color: opts.marker || A.BODY_COLOR, pos: new T.Vector3(), a: 0, speed: 0, idx: 0, lap: -1, lat: 0, steer: 0, done: 0, skill: opts.skill || 1 };
+    const car = { model, holder, isPlayer, name: opts.name || "You", color: opts.base || A.BODY_COLOR, pos: new T.Vector3(), a: 0, speed: 0, idx: 0, lap: -1, lat: 0, steer: 0, done: 0, skill: opts.skill || 1 };
     cars.push(car); return car;
   }
   function pose(car, dt) {
