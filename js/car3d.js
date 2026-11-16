@@ -3,7 +3,7 @@
   const box = document.getElementById("viewer");
   if (!box) return;
   const note = box.querySelector(".note");
-  if (!window.THREE || !window.TAAero) { note.textContent = "An internet connection is needed to load the 3D viewer."; return; }
+  if (!window.THREE || !window.TAAero || !window.TAAeroCAD) { note.textContent = "An internet connection is needed to load the 3D viewer."; return; }
   const T = THREE, A = TAAero, lin = A.lin, { lerp, clamp, smoothstep: smooth } = T.MathUtils;
 
   let renderer;
@@ -340,7 +340,7 @@
   reduced.addEventListener("change", e => { if (e.matches) { setSpin(false); playing = false; pause.textContent = "Play flow"; } });
 
   /* ---------- Go ---------- */
-  car = A.buildCar({ detail: "high" });
+  car = A.buildCar();
   car.paint = car.bodyMesh.material;
   rig.add(car.group);
   buildPartUI(); buildFlow(); buildPressure();

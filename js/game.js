@@ -5,7 +5,7 @@
   const stage = document.getElementById("game");
   if (!stage) return;
   const $ = id => document.getElementById(id);
-  if (!window.THREE || !window.TAAero) { $("g-menu-msg").textContent = "The game needs an internet connection to load its 3D engine."; return; }
+  if (!window.THREE || !window.TAAero || !window.TAAeroCAD || !window.buildRivalCar) { $("g-menu-msg").textContent = "The game needs an internet connection to load its 3D engine."; return; }
   const T = THREE, A = TAAero, lin = A.lin, { lerp, clamp } = T.MathUtils;
 
   let renderer;

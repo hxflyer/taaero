@@ -31,7 +31,7 @@
         </div>
         <p>Our CAD design pairs a pointed nose and split front wing with low sidepods and a rear wing mounted directly to the cartridge housing. The body is shown in Stoop’s blue-green teal.</p>
       </div>
-      <img class="concept-render" src="images/car-cad-teal.jpg" width="1586" height="992" alt="Three-quarter CAD view of the TA-aero car in blue-green teal">
+      <img class="concept-render" src="images/car-v512.jpg" width="1440" height="900" alt="Three-quarter render of the TA-aero v5.12 CAD car in blue-green teal">
     </div>
   </section>
 
@@ -60,7 +60,7 @@
           <aside class="lab-side" id="lab-controls" hidden>
             <div class="stack" data-panel="studio">
               <h3>Studio</h3>
-              <p class="muted">Rotate the model to see the split front wing, sidepods and low rear wing from the supplied CAD views.</p>
+              <p class="muted">Rotate the v5.12 CAD model to inspect the body, wings and wheels. The painted surfaces use Stoop’s blue-green teal.</p>
               <div class="chips" role="group" aria-label="Camera views">
                 <button class="chip" data-view="perspective" type="button">Three-quarter</button>
                 <button class="chip" data-view="side" type="button">Side</button>
@@ -118,16 +118,16 @@
 
       <div class="diagram">
         <svg viewBox="0 0 900 330" role="img" aria-label="Side view of a STEM Racing car with labelled parts">
-          <image href="images/car-side.svg" x="110" y="75" width="680" height="196"/>
+          <image href="images/car-v512-side.png" x="110" y="75" width="680" height="196"/>
           <g fill="none" stroke="#17242e" stroke-width="1.2">
-            <path d="M186 232 V285 M311 246 V303 M405 112 V46 M604 91 V46 M727 121 V74 M620 246 V303"/>
+            <path d="M186 232 V285 M312 248 V303 M410 129 V46 M650 92 V46 M735 116 V74 M623 264 V303"/>
           </g>
           <text x="186" y="302" text-anchor="middle">Front wing</text>
-          <text x="311" y="320" text-anchor="middle">Front wheels</text>
-          <text x="405" y="37" text-anchor="middle">Body</text>
-          <text x="604" y="37" text-anchor="middle">CO₂ cartridge chamber</text>
-          <text x="727" y="66" text-anchor="middle">Rear wing</text>
-          <text x="620" y="320" text-anchor="middle">Rear wheels</text>
+          <text x="312" y="320" text-anchor="middle">Front wheels</text>
+          <text x="410" y="37" text-anchor="middle">Body</text>
+          <text x="650" y="37" text-anchor="middle">CO₂ cartridge chamber</text>
+          <text x="735" y="66" text-anchor="middle">Rear wing</text>
+          <text x="623" y="320" text-anchor="middle">Rear wheels</text>
         </svg>
       </div>
 
@@ -199,7 +199,7 @@
             <div class="strip" id="strip">
               <div class="ticks"></div><div class="finish"></div>
               <svg class="car" id="sim-car" viewBox="0 0 76 30" aria-hidden="true">
-                <image href="images/car-side.svg" width="76" height="30" transform="translate(76 0) scale(-1 1)"/>
+                <image href="images/car-v512-side.png" width="76" height="30" transform="translate(76 0) scale(-1 1)"/>
               </svg>
             </div>
             <div class="strip-scale"><span>0 m</span><span>5</span><span>10</span><span>15</span><span>20 m</span></div>
@@ -227,7 +227,8 @@
 <script src="js/site.js?v=5"></script>
 <script src="js/sim.js?v=5"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="js/car-model.js?v=6"></script>
-<script src="js/car3d.js?v=6"></script>
+<script src="js/car-cad-data.js"></script>
+<script src="js/car-model.js?v=7"></script>
+<script src="js/car3d.js?v=7"></script>
 </body>
 </html>
