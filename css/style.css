@@ -242,7 +242,10 @@ dl { margin: 0; }
 .member .role { font: 500 0.78rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--red); }
 .member h3 { font-size: 2.2rem; }
 .member ul { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.97rem; }
-.member--mascot .slot { background: var(--slate); }
+.slot.mascot-art { background: #fff; padding: 1rem; }
+.slot.mascot-art img { position: static; width: 100%; height: auto; }
+.mascot-art--small { width: min(100%, 14rem); aspect-ratio: auto; }
+.member:hover .slot.mascot-art img { transform: none; }
 
 /* ---------- Timeline ---------- */
 .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
